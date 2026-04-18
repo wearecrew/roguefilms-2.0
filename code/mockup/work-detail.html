@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Work detail — mockup (Rogue v2 Phase 3)</title>
+
+<!--
+  STATIC MOCKUP of the work-detail layout. Used for two Webflow contexts:
+
+    1. /director-showreels/[slug] template page  — CMS-bound, full page
+    2. Sitewide lightbox overlay body             — populated via fetch+inject
+
+  The same element tree goes in both places. On the standalone page, CMS
+  fields populate it directly via Webflow bindings. In the lightbox, the
+  controller fetches the standalone page HTML, extracts the
+  [data-rogue-showreel-content] element, and replaces the lightbox body's
+  content with it.
+
+  All [data-*] attributes prefixed `rogue-` are contracts the controller
+  reads. Don't rename them without updating the controller.
+
+  Open this file in a browser to preview the layout. Placeholder text and
+  a sample video are used; the real page binds these to CMS fields.
+-->
+
+<style>
+  /* ─── Reset / base ──────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: #00162c; /* color/surface/page */
+    color: #f1f2eb;       /* color/text/primary */
+    font-family: "Px Grotesk", "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+  button { cursor: pointer; font: inherit; background: none; border: none; color: inherit; }
+  ul { list-style: none; }
+  video, img { display: block; max-width: 100%; }
+
+  /* Runtime-injected tokens mimic (these also come from the controller in prod). */
+  :root {
+    --rogue-accent: #f25d78;
+    --motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ─── Showreel layout ───────────────────────────────────────────── */
+  .showreel_layout {
+    display: flex;
+    flex-direction: column;
+    gap: 80px;            /* space/80 */
+    padding: 40px 80px 80px;  /* space/40 top, space/80 h, space/80 bottom */
+    min-height: 100vh;
+  }
+
+  /* ─── Block A: video + meta ─────────────────────────────────────── */
+  .showreel_video-block {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;            /* space/20 */
+    position: relative;
+  }
+
+  .showreel_video-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 40px;
+    padding: 0 80px;
+    position: relative;
+  }
+
+  /* Video frame — aspect-ratio is set inline via CMS fields (or by controller
+     reading data-video-width / data-video-height on this element). Defaults
+     to 16/9. */
+  .showreel_video-frame {
+    flex: 0 0 auto;
+    width: 1280px;
+    max-width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .showreel_video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .showreel_video-poster {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+  }
+
+  /* Prev / next arrow buttons (desktop only — hidden on mobile via media query). */
+  .showreel_nav-btn {
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgba(241, 242, 235, 0.3);
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #f1f2eb;
+    transition: border-color 150ms var(--motion-easing-standard), color 150ms var(--motion-easing-standard);
+  }
+  .showreel_nav-btn:hover,
+  .showreel_nav-btn:focus-visible { border-color: var(--rogue-accent); color: var(--rogue-accent); }
+  .showreel_nav-btn svg { width: 16px; height: 16px; }
+  .showreel_nav-prev svg { transform: rotate(180deg); }
+
+  /* Back pill — absolute position top-left of video-row on desktop. */
+  .showreel_back {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: inline-flex;
+    align-items: center;
+    padding: 16px 20px;  /* space/16 v, space/20 h (pill) */
+    border: 1px solid rgba(241, 242, 235, 0.3);
+    border-radius: 9999px;
+    font-size: 16px;     /* type-size/body-md (desktop) */
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #f1f2eb;
+    transition: border-color 150ms var(--motion-easing-standard), color 150ms var(--motion-easing-standard);
+  }
+  .showreel_back:hover,
+  .showreel_back:focus-visible { border-color: var(--rogue-accent); color: var(--rogue-accent); }
+
+  /* Title row */
+  .showreel_title-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 40px;
+    padding: 0 80px;
+  }
+
+  .showreel_title-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .showreel_title {
+    font-size: 20px;      /* type-size/body-lg @ desktop */
+    line-height: 42px;    /* observed in Figma */
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .showreel_director {
+    font-size: 16px;      /* type-size/body-md @ desktop */
+    line-height: 1.5;
+    text-transform: uppercase;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    transition: color 150ms var(--motion-easing-standard);
+  }
+  .showreel_director:hover { color: var(--rogue-accent); }
+
+  /* Copy-share-link pill */
+  .showreel_copy-link {
+    align-self: flex-end;
+    display: inline-flex;
+    align-items: center;
+    padding: 16px 20px;
+    border: 1px solid rgba(241, 242, 235, 0.3);
+    border-radius: 9999px;
+    font-size: 16px;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: border-color 150ms var(--motion-easing-standard), color 150ms var(--motion-easing-standard);
+    min-width: 200px;
+    justify-content: center;
+    white-space: nowrap;
+  }
+  .showreel_copy-link:hover,
+  .showreel_copy-link:focus-visible { border-color: var(--rogue-accent); color: var(--rogue-accent); }
+  .showreel_copy-link.is-copied { color: var(--rogue-accent); border-color: var(--rogue-accent); }
+
+  /* ─── Block B: stills + credits ─────────────────────────────────── */
+  .showreel_detail-block {
+    display: flex;
+    gap: 80px;
+    padding: 0 80px;
+    justify-content: center;
+  }
+
+  .showreel_stills {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  .showreel_still {
+    width: 400px;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    background: #000;
+  }
+
+  .showreel_credits {
+    width: 640px;
+    max-width: 640px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .showreel_credits-title {
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+  }
+
+  /* RichText block — Webflow wraps it; here we render common children. */
+  .showreel_credits-body p { margin-bottom: 8px; }
+  .showreel_credits-body p:last-child { margin-bottom: 0; }
+  .showreel_credits-body strong { font-weight: 700; }
+
+  /* ─── Mobile breakpoint ─────────────────────────────────────────── */
+  @media (max-width: 767px) {
+    .showreel_layout { gap: 40px; padding: 20px; }
+    .showreel_video-block { gap: 16px; }
+    .showreel_video-row { padding: 0; gap: 16px; flex-direction: column; align-items: stretch; }
+    .showreel_video-frame { width: 100%; }
+    .showreel_nav-btn { display: none; }   /* arrows hidden on mobile */
+    .showreel_back { position: static; align-self: flex-start; }
+    .showreel_title-row { padding: 0; flex-direction: column; align-items: stretch; gap: 20px; }
+    .showreel_title { font-size: 16px; line-height: 1.3; }
+    .showreel_director { font-size: 12px; }
+    .showreel_copy-link { align-self: stretch; }
+    .showreel_detail-block { padding: 0; flex-direction: column; gap: 40px; }
+    .showreel_stills { align-items: center; }
+    .showreel_still { width: 100%; max-width: 282px; }
+    .showreel_credits { width: 100%; }
+    .showreel_credits-title, .showreel_credits-body { font-size: 14px; }
+  }
+
+  /* ─── Mockup-only page chrome (for viewing this file) ───────────── */
+  .mockup-note {
+    background: rgba(242, 93, 120, 0.15);
+    color: var(--rogue-accent);
+    padding: 12px 80px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  @media (max-width: 767px) { .mockup-note { padding: 12px 20px; } }
+</style>
+
+</head>
+<body>
+
+<div class="mockup-note">
+  Static mockup — Rogue v2 Phase 3 work-detail layout. Copy into the
+  <code>/director-showreels/[slug]</code> template AND the sitewide lightbox overlay.
+</div>
+
+<!--
+  ═══════════════════════════════════════════════════════════════════════
+  BEGIN SHOWREEL CONTENT
+  ═══════════════════════════════════════════════════════════════════════
+
+  The outer container carries `data-rogue-showreel-content`. The lightbox
+  controller extracts this element's innerHTML when fetching the standalone
+  page and injects it into the lightbox body.
+
+  When copying into Webflow:
+    - On the /director-showreels/[slug] template page, wrap the layout with
+      an element that has the attribute `data-rogue-showreel-content`.
+    - In the lightbox overlay body, the body wrapper itself can carry
+      `data-rogue-showreel-content` (or the inserted content will be placed
+      directly inside the overlay body).
+-->
+
+<main class="showreel_layout" data-rogue-showreel-content>
+
+  <!-- BLOCK A: Video + meta -->
+  <section class="showreel_video-block">
+
+    <!-- Video row: prev-arrow | video-frame | next-arrow. Back pill absolute
+         top-left within this row. -->
+    <div class="showreel_video-row">
+
+      <!-- Back pill: in the standalone page, href goes to history back
+           (or a sensible fallback). In the lightbox, the controller
+           intercepts clicks on this element (matching `data-rogue-showreel-back`)
+           and closes the overlay. -->
+      <a href="javascript:history.back()"
+         class="showreel_back"
+         data-rogue-showreel-back>
+        Back
+      </a>
+
+      <!-- Prev button — desktop only. Standalone page: navigates to the
+           previous showreel in the director's archive. Lightbox: controller
+           handles via `data-rogue-lightbox-prev` on the overlay's prev button. -->
+      <button type="button"
+              class="showreel_nav-btn showreel_nav-prev"
+              aria-label="Previous film"
+              data-rogue-showreel-prev>
+        <svg viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <!-- Video frame — aspect ratio comes from CMS `video-width` / `video-height`.
+           Controller reads these data attributes and sets aspect-ratio.
+           (On Webflow's template page, the aspect-ratio style can be bound
+           inline if editable; otherwise the controller's auto-adjust works.) -->
+      <div class="showreel_video-frame"
+           data-rogue-showreel-frame
+           data-video-width="1920"
+           data-video-height="1080">
+
+        <!-- Poster image — covers the video until user plays.
+             Bind src to CMS `preview-image`. -->
+        <img class="showreel_video-poster"
+             data-rogue-showreel-poster
+             src="https://picsum.photos/1920/1080?random=1"
+             alt="" />
+
+        <!-- Full-length video.
+             Bind src to CMS `hero-video` link.
+             On the standalone page: controls + poster attr, audio on.
+             In the lightbox: same, plus autoplay optional. -->
+        <video class="showreel_video"
+               data-rogue-showreel-video
+               src=""
+               preload="metadata"
+               playsinline
+               controls
+               poster="https://picsum.photos/1920/1080?random=1">
+        </video>
+
+      </div>
+
+      <!-- Next button — desktop only. -->
+      <button type="button"
+              class="showreel_nav-btn showreel_nav-next"
+              aria-label="Next film"
+              data-rogue-showreel-next>
+        <svg viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+    </div>
+
+    <!-- Title row: brand • title + director on left, copy-link pill on right -->
+    <div class="showreel_title-row">
+
+      <div class="showreel_title-col">
+        <!-- Title: bind to CMS as "{{brand}} • {{title}}" concatenation. -->
+        <h1 class="showreel_title"
+            data-rogue-showreel-title>
+          Audi • A pleasure to follow
+        </h1>
+
+        <!-- Director link: href → /directors-roster/{{director.slug}},
+             text → {{director.name}}. Use Webflow's reference binding. -->
+        <a class="showreel_director"
+           data-rogue-showreel-director
+           href="/directors-roster/sam-brown">
+          Sam Brown
+        </a>
+      </div>
+
+      <!-- Copy-share-link pill. href is the canonical URL (`/director-showreels/{slug}`).
+           Controller binds a click handler that copies the absolute URL to
+           clipboard and shows a "Copied!" confirmation. -->
+      <button type="button"
+              class="showreel_copy-link"
+              data-rogue-showreel-copy-link
+              data-rogue-showreel-url="/director-showreels/audi-a-pleasure-to-follow">
+        Copy share link
+      </button>
+
+    </div>
+
+  </section>
+
+  <!-- BLOCK B: Stills + credits -->
+  <section class="showreel_detail-block">
+
+    <!-- Stills column: CMS `project-stills` MultiImage rendered as a vertical
+         stack. Each still is 400px wide, 4:5 aspect on desktop; fluid on mobile. -->
+    <div class="showreel_stills"
+         data-rogue-showreel-stills>
+      <img class="showreel_still" src="https://picsum.photos/400/500?random=2" alt="" />
+      <img class="showreel_still" src="https://picsum.photos/400/500?random=3" alt="" />
+    </div>
+
+    <!-- Credits column: CMS `credits` RichText field. Webflow renders the
+         rich text directly inside the -body element. -->
+    <div class="showreel_credits">
+      <div class="showreel_credits-title">Credits:</div>
+      <div class="showreel_credits-body" data-rogue-showreel-credits>
+        <p><strong>Director:</strong> Sam Brown</p>
+        <p><strong>Production Company:</strong> Rogue Films</p>
+        <p><strong>Producer:</strong> Amanda Verity</p>
+        <p><strong>DOP:</strong> Nick Morris</p>
+        <p><strong>Editor:</strong> Paul Watts @ The Quarry</p>
+        <p><strong>Post Production:</strong> The Mill</p>
+        <p><strong>Sound Design:</strong> 750mph</p>
+        <p><strong>Agency:</strong> BBH London</p>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<!--
+  ═══════════════════════════════════════════════════════════════════════
+  END SHOWREEL CONTENT
+  ═══════════════════════════════════════════════════════════════════════
+-->
+
+</body>
+</html>
