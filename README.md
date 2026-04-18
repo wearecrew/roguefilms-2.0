@@ -118,11 +118,12 @@ Skills under `/skills/` are how we codify repeating patterns for future Claude s
 
 Update this section regularly. It's the first thing anyone reads when picking the project up.
 
-**Current phase:** Phase 1 in progress (foundation).
+**Current phase:** Phase 1 in progress (foundation). Token spec ready for review.
 
 **In flight:**
-- Token tree scaffold created in Webflow Designer (new `Tokens` collection, 5 raw + 5 semantic colour variables seeded). Full tree to be completed in Claude Code with Figma MCP access.
+- Token spec (`docs/design-system.md` + `docs/tokens.json`) written from Figma desktop + mobile extraction. **Awaiting Dan's review** before Figma Variables import and Webflow Variables population.
 - GitHub repo `wearecrew/roguefilms-2.0` set up as single source of truth for docs and code.
+- Webflow `Tokens` collection currently holds 5 raw + 5 semantic colour variables (seeded Phase 0). Full population pending review + Designer MCP activation.
 
 **Done:**
 - Site duplicated as Roguefilms 2.0 (CMS fully populated, 700+ showreels, directors, news inherited).
@@ -130,11 +131,20 @@ Update this section regularly. It's the first thing anyone reads when picking th
 - Design walkthrough of six key Figma frames, architectural decisions locked.
 - Vimeo plan confirmed (Pro, HLS available).
 - Initial `Tokens` variable collection created with core brand colours.
+- Full Figma extraction: all 7 desktop frames (1728px canvas) + all 7 mobile frames (402px canvas, iPhone 16/17 Pro).
+- **Key finding**: Figma file contains zero native Variables/Styles — every value is inline. Token tree is derived from observed usage, not mirrored from Figma.
+- Design system spec written at `docs/design-system.md` (human-readable, with rationale and open questions).
+- Machine-readable `docs/tokens.json` written in Crew Token Bridge plugin format for Figma import.
 
-**Next up:**
-- Claude Code session: complete token tree (spacing, typography, radii, full colour palette) by reading Figma MCP.
-- Document the complete token tree in `docs/design-system.md`.
-- Build `talent-v2` page as the Phase 2 deliverable.
+**Next up (awaiting Dan):**
+1. Review `docs/design-system.md` and `docs/tokens.json`.
+2. Answer the one blocking question: **font licensing for Px Grotesk + Galano Grotesque** (neither is Google-hosted; commercial licensing check needed).
+3. Activate the Webflow Designer MCP so the Tokens collection can be populated.
+4. Import `docs/tokens.json` to Figma via the Crew Token Bridge plugin (optional but recommended — lets designers reference the same tokens going forward).
+
+**Once unblocked:**
+- Populate the Webflow Tokens collection in the order documented at `docs/design-system.md § Implementation plan`.
+- Begin Phase 2 (`talent-v2` page).
 
 **Resolved (Phase 0 walkthrough):**
 - Vimeo plan: Pro. HLS streams are available on Pro accounts via the Player API. We can use HLS for the talent page background video and grid hover loops. Direct progressive MP4 also available as fallback.
