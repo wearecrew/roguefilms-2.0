@@ -4,15 +4,22 @@
   Paste this into: Webflow Site Settings → Custom Code → Footer Code.
 
   Loads the video-controller module from jsDelivr (served from the
-  wearecrew/roguefilms-2.0 GitHub repo at the latest main commit).
+  wearecrew/roguefilms-2.0 GitHub repo).
 
-  Pinning:
-    - @main  — always latest (current: dev default, what this snippet uses)
-    - @v1.0  — pinned to a version tag (switch before launch for stability)
+  Version strategy:
+    @0.4   — semver range, picks the highest v0.4.x tag automatically.
+             Recommended for live: patches within the 0.4 line update
+             without any Webflow-side change, breaking changes won't
+             land until we publish @0.5 and update this embed.
+    @main  — follows the latest commit on the main branch. Good for
+             rapid dev, but jsDelivr sometimes throttles purges on
+             rolling refs, causing stale content. Avoid in production.
+    @vX.Y.Z — pinned to a specific release tag. Use for production
+             launches where stability matters.
 
   The module:
     - Injects :root CSS custom properties for motion-easing and motion-duration.
     - Registers window.RogueFilms for per-page init scripts.
     - No DOM manipulation until a per-page script calls an init method.
 -->
-<script src="https://cdn.jsdelivr.net/gh/wearecrew/roguefilms-2.0@main/code/video-controller.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/wearecrew/roguefilms-2.0@0.4/code/video-controller.js" defer></script>
