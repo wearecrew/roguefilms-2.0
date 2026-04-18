@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.4.1-phase2';
+  const VERSION = '0.4.2-phase2';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -292,12 +292,14 @@
 
       this.state.activeIndex = index;
 
-      // Active-director class on the link
+      // Active-director class. Applied to BOTH the director element itself
+      // AND its descendant anchor (.talent_link), so CSS that targets either
+      // `.talent_item.is-active` or `.talent_link.is-active` will work.
       this.directorEls.forEach((el) => {
-        el.classList.toggle(
-          'is-active',
-          el.dataset.rogueDirector === director.id
-        );
+        const isActive = el.dataset.rogueDirector === director.id;
+        el.classList.toggle('is-active', isActive);
+        const anchor = el.tagName === 'A' ? null : el.querySelector('a');
+        if (anchor) anchor.classList.toggle('is-active', isActive);
       });
 
       // Poster swap — instant, always visible, covers loading time.

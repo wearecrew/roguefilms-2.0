@@ -60,28 +60,35 @@ body.page-talent
       position: absolute, inset: 0, overflow: hidden, z-index: 0
       background-color: color/primitive/black (fallback behind poster)
 
-      HTML Embed                   (poster + both <video> tags + styling)
+      HTML Embed              (poster + videos + overlay, all in one embed)
       ┌────────────────────────────────────────────────────────────────────┐
-      │ <!-- Poster img: always visible behind the videos. The controller  │
-      │      swaps src on each director change. Covers loading/buffering   │
-      │      time so there's no black flash. -->                           │
+      │ <!-- Layer 1 (bottom): Poster img. Always visible. Controller      │
+      │      swaps its src on each director change. Covers video buffer.-->│
       │ <img data-rogue-talent-poster class="talent_bg-poster" alt="" />   │
       │                                                                    │
+      │ <!-- Layer 2: Active video. Fades up over the poster on canplay.-->│
       │ <video data-rogue-talent-bg="active"                               │
       │        class="talent_bg-video"                                     │
       │        muted loop playsinline preload="auto"></video>              │
       │                                                                    │
+      │ <!-- Layer 3: Preload video. Hidden; loads next director's src. -->│
       │ <video data-rogue-talent-bg="preload"                              │
       │        class="talent_bg-video"                                     │
       │        muted loop playsinline preload="auto"></video>              │
       │                                                                    │
+      │ <!-- Layer 4 (top): 40% black dim to improve text legibility. -->  │
+      │ <div class="talent_bg-dim" aria-hidden="true"></div>               │
+      │                                                                    │
       │ <style>                                                            │
       │   .talent_bg-poster,                                               │
-      │   .talent_bg-video {                                               │
+      │   .talent_bg-video,                                                │
+      │   .talent_bg-dim {                                                 │
       │     position: absolute; inset: 0;                                  │
       │     width: 100%; height: 100%;                                     │
-      │     object-fit: cover;                                             │
+      │     pointer-events: none;                                          │
       │   }                                                                │
+      │   .talent_bg-poster,                                               │
+      │   .talent_bg-video { object-fit: cover; }                          │
       │   .talent_bg-poster { opacity: 1; }                                │
       │   .talent_bg-video {                                               │
       │     opacity: 0;   /* controller fades up once canplay fires */     │
@@ -89,13 +96,17 @@ body.page-talent
       │                          var(--motion-easing-standard,             │
       │                              cubic-bezier(0.4, 0, 0.2, 1));       │
       │   }                                                                │
+      │   .talent_bg-dim { background: rgba(0, 0, 0, 0.4); }               │
       │ </style>                                                           │
       └────────────────────────────────────────────────────────────────────┘
-      (no src= on any element — controller sets them on init and swap)
+      (no src= on img or videos — controller sets them on init and swap)
 
-      Div Block                 class: talent_bg-dim
-        position: absolute, inset: 0, pointer-events: none
-        background: rgba(0,0,0,0.35)   (dims the video for text legibility)
+      Why the overlay is inside the Embed and not a separate Webflow Div:
+      The Embed is its own stacking context. If the overlay is built as a
+      separate sibling Div after the Embed, it ends up BELOW the videos
+      (because the Embed's internal z-order wins for its own children).
+      Putting overlay inside the Embed, as the last element, keeps it on
+      top of the videos without fighting z-index.
 
     Div Block                   class: talent_content
       position: relative, z-index: 1
