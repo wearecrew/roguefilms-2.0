@@ -136,9 +136,11 @@ body.page-talent
           text: "Rebel"
           custom attr: data-rogue-talent-filter="rebel"
 
-        Button                  class: filter-pill is-reset
-          text: "Reset"
-          custom attr: data-rogue-talent-filter="reset"
+        (Optional fourth pill — an external link out of the Talent page,
+         e.g. a "Going Rogue" or "Gallery" link. Hardcode the href in
+         the Designer; do NOT give it a data-rogue-talent-filter
+         attribute — the controller should ignore it so the click
+         navigates away normally.)
 
       Collection List Wrapper   class: talent_list-wrap
         collection: Directors rosters
@@ -195,13 +197,13 @@ Applied to `.filter-pill`:
 - Transition: border-color var(--motion-duration-fast), color var(--motion-duration-fast)
 
 Active state (`.is-active` class, added by controller):
-- Border-color: color/text/accent
-- Color: color/text/accent
+- Border-color: color/text/accent (pink)
+- Color: color/text/accent (pink)
 
 Hover:
 - Border-color: color/text/accent
 
-Note: the reset pill (`is-reset` combo) doesn't take the active state — it's a single-tap "clear filter" action.
+**Note on active-state styling**: the controller injects active-state CSS at runtime (targeting `[data-rogue-talent-filter].is-active` and `.talent_link.is-active`), so the active states "just work" without you adding combo-class styling in the Designer. Your Webflow Designer styles only need to define the **default** and optional **hover** states; the `.is-active` state is handled by the runtime.
 
 ---
 

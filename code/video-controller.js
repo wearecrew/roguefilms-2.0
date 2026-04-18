@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.4.2-phase2';
+  const VERSION = '0.4.3-phase2';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -38,6 +38,9 @@
     if (document.getElementById('rogue-runtime-tokens')) return;
     const style = document.createElement('style');
     style.id = 'rogue-runtime-tokens';
+    // Uses Webflow's generated CSS variable for text/accent, with hex
+    // fallback. Specificity is two-class (e.g. .talent_link.is-active)
+    // so it wins over Webflow's single-class base styles without !important.
     style.textContent = [
       ':root {',
       '  --motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);',
@@ -46,6 +49,18 @@
       '  --motion-duration-fast: 150ms;',
       '  --motion-duration-normal: 300ms;',
       '  --motion-duration-slow: 500ms;',
+      '  --rogue-accent: var(--_tokens---color--text--accent, #f25d78);',
+      '}',
+      '',
+      '/* Active-director highlight (auto-rotate + hover) */',
+      '.talent_link.is-active,',
+      '[data-rogue-director].is-active .talent_link,',
+      '[data-rogue-director].is-active { color: var(--rogue-accent); }',
+      '',
+      '/* Active filter pill */',
+      '[data-rogue-talent-filter].is-active {',
+      '  color: var(--rogue-accent);',
+      '  border-color: var(--rogue-accent);',
       '}',
     ].join('\n');
     document.head.appendChild(style);
@@ -198,6 +213,8 @@
 
       this.prepareVideoElements();
       this.bindEvents();
+      // Initial visual state: highlight the "All" filter pill.
+      this.setFilter('all');
       // Initial show — not instant, so the first video fades in over its
       // poster once canplay fires (or after the safety timeout).
       this.show(0);
@@ -444,12 +461,12 @@
       const nextFilter = name === 'reset' ? 'all' : name;
       this.state.filter = nextFilter;
 
-      // Highlight active pill
+      // Highlight active pill. "All" also gets highlighted when nothing
+      // else is filtered — it represents the current state visually.
       this.root.querySelectorAll('[data-rogue-talent-filter]').forEach((btn) => {
         btn.classList.toggle(
           'is-active',
-          btn.dataset.rogueTalentFilter === nextFilter &&
-            nextFilter !== 'all'
+          btn.dataset.rogueTalentFilter === nextFilter
         );
       });
 
