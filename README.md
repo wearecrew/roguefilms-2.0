@@ -118,9 +118,11 @@ Skills under `/skills/` are how we codify repeating patterns for future Claude s
 
 Update this section regularly. It's the first thing anyone reads when picking the project up.
 
-**Current phase:** Phase 1 being re-done after reset (2026-04-18).
+**Current phase:** Phase 1 re-spec written; awaiting test-import validation (2026-04-18).
 
-**Reset context:** First Phase 1 implementation invalidated. Webflow Tokens collection wiped. Spec (`docs/design-system.md`) and `docs/tokens.json` cleared. Reasons in [docs/decisions.md](docs/decisions.md). Re-running Phase 1 with three-mode responsive variables and a tested plugin-import format.
+**Reset context:** First Phase 1 implementation invalidated. Webflow Tokens collection empty. Spec rewritten at [docs/design-system.md](docs/design-system.md) with three-mode responsive variables (no `clamp()`) and consistent scale-based naming. Reasons in [docs/decisions.md](docs/decisions.md).
+
+**Next immediate step:** Dan test-imports [docs/tokens-test.json](docs/tokens-test.json) via the Crew Token Bridge plugin. If it produces 3 clean collections (Color, Type-Size, Type-Family) with the expected tokens, we proceed to writing the full `docs/tokens.json`. If it produces a broken structure like the previous attempt, we investigate the plugin source and adjust the format.
 
 **Done:**
 - Site duplicated as Roguefilms 2.0 (CMS fully populated, 700+ showreels, directors, news inherited).

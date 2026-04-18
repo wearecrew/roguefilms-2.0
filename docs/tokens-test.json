@@ -1,0 +1,24 @@
+{
+  "options": { "separateCollections": true },
+  "groups": [
+    {
+      "name": "color",
+      "tokens": [
+        { "path": "test-colour", "figmaType": "COLOR", "value": "#f25d78", "description": "Test" }
+      ]
+    },
+    {
+      "name": "type-size",
+      "modes": ["Mobile", "Tablet", "Desktop"],
+      "tokens": [
+        { "path": "test-size", "figmaType": "FLOAT", "values": { "Mobile": "16px", "Tablet": "18px", "Desktop": "20px" }, "description": "Test" }
+      ]
+    },
+    {
+      "name": "type-family",
+      "tokens": [
+        { "path": "test-font", "figmaType": "STRING", "value": "Test Font", "description": "Test" }
+      ]
+    }
+  ]
+}
