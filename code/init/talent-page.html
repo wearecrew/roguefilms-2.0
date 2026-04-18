@@ -1,0 +1,25 @@
+<!--
+  Talent page per-page custom code.
+
+  Paste this into: Webflow Designer → Talent page settings → Custom code → Footer.
+
+  It waits for the sitewide video-controller.js to load (served via jsDelivr in
+  Site Settings → Custom Code → Footer), then initialises the talent background-swap
+  controller on DOMContentLoaded.
+
+  Options:
+    - autoRotateMs  (default 6000) — ms between auto-rotate swaps
+    - crossfadeMs   (default 300)  — ms for opacity transition on swap
+-->
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.RogueFilms && window.RogueFilms.initTalentPage) {
+      window.RogueFilms.initTalentPage({
+        autoRotateMs: 6000,
+        crossfadeMs: 300
+      });
+    } else {
+      console.warn('[RogueFilms] video-controller.js not loaded');
+    }
+  });
+</script>

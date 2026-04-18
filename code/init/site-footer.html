@@ -1,0 +1,18 @@
+<!--
+  Sitewide footer embed.
+
+  Paste this into: Webflow Site Settings → Custom Code → Footer Code.
+
+  Loads the video-controller module from jsDelivr (served from the
+  wearecrew/roguefilms-2.0 GitHub repo at the latest main commit).
+
+  Pinning:
+    - @main  — always latest (current: dev default, what this snippet uses)
+    - @v1.0  — pinned to a version tag (switch before launch for stability)
+
+  The module:
+    - Injects :root CSS custom properties for motion-easing and motion-duration.
+    - Registers window.RogueFilms for per-page init scripts.
+    - No DOM manipulation until a per-page script calls an init method.
+-->
+<script src="https://cdn.jsdelivr.net/gh/wearecrew/roguefilms-2.0@main/code/video-controller.js" defer></script>
