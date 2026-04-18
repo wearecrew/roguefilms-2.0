@@ -118,7 +118,7 @@ Skills under `/skills/` are how we codify repeating patterns for future Claude s
 
 Update this section regularly. It's the first thing anyone reads when picking the project up.
 
-**Current phase:** Phase 1 complete. Ready to start Phase 2 (Talent page).
+**Current phase:** Phase 2 in flight — Talent page. Controller + tests shipped, Designer build pending.
 
 **Phase 1 deliverables (2026-04-18):**
 - Design system spec at [docs/design-system.md](docs/design-system.md) — two-tier (primitive + semantic) naming, consistent scale, responsive-patterns section.
@@ -146,7 +146,23 @@ Update this section regularly. It's the first thing anyone reads when picking th
 5. Full `docs/tokens.json`. Dan imports via plugin.
 6. Webflow populated via MCP: three modes on the collection, discrete per-mode values, `existing_variable_id` references for semantics.
 
-**Then (Phase 2: Talent page):** sitewide custom-code shell, `talent-v2` page build, video controller JS, Playwright tests.
+**Phase 2 shipped so far:**
+- [`code/video-controller.js`](code/video-controller.js) — sitewide module served via jsDelivr. Injects motion-easing CSS vars and exposes `window.RogueFilms.initTalentPage()` with the full background-swap controller (crossfade, auto-rotate, filters, reduced-motion, tab-visibility).
+- [`code/init/site-footer.html`](code/init/site-footer.html) — single `<script src>` snippet for Site Settings → Custom Code → Footer.
+- [`code/init/talent-page.html`](code/init/talent-page.html) — per-page init script.
+- [`docs/technical-architecture.md`](docs/technical-architecture.md) — runtime structure, DOM contract, update flow.
+- [`docs/phase-2-talent-build.md`](docs/phase-2-talent-build.md) — step-by-step Designer build guide.
+- [`code/tests/talent.spec.js`](code/tests/talent.spec.js) — Playwright suite against the DOM contract.
+- Talent v2 page shell created in Webflow (slug `talent-v2`, page ID `69e3c6792fffaea7766fd272`).
+
+**Phase 2 to finish:**
+1. Add the sitewide `<script src>` tag to Webflow Site Settings → Custom Code → Footer (from `code/init/site-footer.html`).
+2. Build the Talent v2 page layout in the Designer per `docs/phase-2-talent-build.md` — includes the CMS Collection List bound to Directors rosters.
+3. Paste the per-page init script into the Talent v2 page custom code footer.
+4. Publish to staging.
+5. `npm install && npm test` to validate.
+
+**Then (Phase 3):** lightbox + work detail pattern.
 
 **Resolved (Phase 0 walkthrough):**
 - Vimeo plan: Pro. HLS streams are available on Pro accounts via the Player API. We can use HLS for the talent page background video and grid hover loops. Direct progressive MP4 also available as fallback.

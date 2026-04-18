@@ -1,0 +1,14 @@
+{
+  "name": "roguefilms-2.0",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Rogue Films website v2 — Webflow + custom video controller + tests",
+  "scripts": {
+    "test": "playwright test",
+    "test:talent": "playwright test code/tests/talent.spec.js",
+    "test:install": "playwright install chromium firefox webkit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
