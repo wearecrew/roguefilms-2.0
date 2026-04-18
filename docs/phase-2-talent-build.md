@@ -41,12 +41,18 @@ Webflow's "custom attributes" feature (on each element's settings panel) is how 
 
 Using Finsweet Client First naming. Tokens referenced by their Webflow Variable names (e.g. `color/surface/page`).
 
+> **Two things that trip people up**:
+>
+> 1. **`data-rogue-talent` is a presence-only attribute.** The controller runs `querySelector('[data-rogue-talent]')` — it doesn't care about the value. Webflow's Custom Attributes UI requires a value field though; just put `"talent"` or any placeholder.
+>
+> 2. **Don't use Webflow's Video or Background Video elements for the background.** Webflow's Background Video wraps the `<video>` in its own markup and sets `src` at design-time — fights the controller's runtime `src` swap. Webflow's Video element renders an iframe (wrong tag entirely). Use an **HTML Embed** with raw `<video>` tags (snippet below).
+
 ```
 body.page-talent
   (nav — already exists, re-use the Navigation component instance)
 
   Section                       class: section_talent
-    data-rogue-talent
+    data-rogue-talent = "talent"      ← value is arbitrary, just needs to be present
     background-color: color/surface/inverse (primitive/black) — talent page only
     position: relative, min-height: 100vh
 
@@ -54,16 +60,30 @@ body.page-talent
       position: absolute, inset: 0, overflow: hidden, z-index: 0
       → background-color: color/primitive/black (fallback behind videos)
 
-      Video element             class: talent_bg-video is-active
-        tag: video (use Webflow's native Video element, or a DOM element with tag=video)
-        attrs: muted, loop, playsinline, preload="auto"
-        custom attr: data-rogue-talent-bg="active"
-        style: position absolute inset 0, width 100%, height 100%,
-               object-fit cover, opacity 1,
-               transition: opacity var(--motion-duration-normal) var(--motion-easing-standard)
-
-      Video element             class: talent_bg-video is-preload
-        same as above but: opacity 0, data-rogue-talent-bg="preload"
+      HTML Embed                   (put both <video> tags in one Embed)
+      ┌────────────────────────────────────────────────────────────────┐
+      │ <video data-rogue-talent-bg="active"                           │
+      │        class="talent_bg-video is-active"                       │
+      │        muted loop playsinline preload="auto"></video>          │
+      │                                                                │
+      │ <video data-rogue-talent-bg="preload"                          │
+      │        class="talent_bg-video is-preload"                      │
+      │        muted loop playsinline preload="auto"></video>          │
+      │                                                                │
+      │ <style>                                                        │
+      │   .talent_bg-video {                                           │
+      │     position: absolute; inset: 0;                              │
+      │     width: 100%; height: 100%;                                 │
+      │     object-fit: cover;                                         │
+      │     transition: opacity var(--motion-duration-normal, 300ms)   │
+      │                         var(--motion-easing-standard,           │
+      │                             cubic-bezier(0.4, 0, 0.2, 1));     │
+      │   }                                                            │
+      │   .talent_bg-video.is-active  { opacity: 1; }                  │
+      │   .talent_bg-video.is-preload { opacity: 0; }                  │
+      │ </style>                                                       │
+      └────────────────────────────────────────────────────────────────┘
+      (no src= on either video — the controller sets it on init and swap)
 
       Div Block                 class: talent_bg-dim
         position: absolute, inset: 0, pointer-events: none
