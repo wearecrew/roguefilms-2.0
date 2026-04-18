@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.3.0-phase2';
+  const VERSION = '0.4.0-phase2';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -103,6 +103,9 @@
         {
           autoRotateMs: 6000,
           crossfadeMs: 300,
+          // Safety fallback if canplay never fires (slow network, 404, etc).
+          // After this we fade in anyway — the poster layer covers the blank.
+          crossfadeTimeoutMs: 2500,
         },
         options || {}
       );
@@ -117,6 +120,10 @@
         active: this.root.querySelector('[data-rogue-talent-bg="active"]'),
         preload: this.root.querySelector('[data-rogue-talent-bg="preload"]'),
       };
+
+      // Optional poster layer — an <img> that sits behind the videos and
+      // covers loading/buffering time. See v0.4.0 notes.
+      this.poster = this.root.querySelector('[data-rogue-talent-poster]');
 
       this.directorEls = Array.from(
         this.root.querySelectorAll('[data-rogue-director]')
@@ -157,6 +164,7 @@
           id: el.dataset.rogueDirector,
           name: (el.textContent || '').trim(),
           videoUrl: el.dataset.rogueVideoUrl || '',
+          posterUrl: el.dataset.roguePosterUrl || '',
           isRebel,
           href,
           anchor,
@@ -176,7 +184,9 @@
 
       this.prepareVideoElements();
       this.bindEvents();
-      this.show(0, { instant: true });
+      // Initial show — not instant, so the first video fades in over its
+      // poster once canplay fires (or after the safety timeout).
+      this.show(0);
       this.queuePreload(this.nextIndexInFilter(0));
       if (!this.state.reducedMotion) this.startAutoRotate();
 
@@ -197,9 +207,13 @@
         v.setAttribute('playsinline', '');
         v.setAttribute('webkit-playsinline', '');
         v.style.transition = `opacity ${this.opts.crossfadeMs}ms var(--motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1))`;
+        // Both start hidden — videos fade up only once canplay fires.
+        // The poster layer (if present) covers the blank space until then.
+        v.style.opacity = '0';
       });
-      this.videos.active.style.opacity = '1';
-      this.videos.preload.style.opacity = '0';
+      // fade-counter lets us discard stale canplay callbacks when the user
+      // rapidly hovers through multiple directors.
+      this.fadeCounter = 0;
     }
 
     bindEvents() {
@@ -239,6 +253,23 @@
     }
 
     // ─── Video swap ────────────────────────────────────────────────────────
+    //
+    // Flow for each show(index):
+    //   1. Update poster image src immediately — covers the blank space behind
+    //      the videos while the new one buffers. The poster element is always
+    //      at opacity 1; videos fade in on top of it once ready.
+    //   2. Set the preload video's src (if not already loaded) and start
+    //      loading. Fire play() eagerly so it kicks off decoding.
+    //   3. Wait for canplay (readyState >= 3 / HAVE_FUTURE_DATA). Once fired,
+    //      fade the current active out and the preload (new active) in.
+    //      If canplay doesn't fire within `crossfadeTimeoutMs` we fade anyway
+    //      — the poster remains visible underneath, so the user sees the
+    //      still instead of a black rectangle.
+    //   3. Swap active/preload references so the next call loads into the
+    //      now-hidden element.
+    //   4. Abort-safety: each show() bumps a fade counter. Callbacks check
+    //      their captured counter value; if it's stale (user hovered again),
+    //      they bail.
 
     show(index, opts) {
       const director = this.directors[index];
@@ -255,32 +286,60 @@
         );
       });
 
-      // If preload already has the right URL, swap. Otherwise set and play.
+      // Poster swap — instant, always visible, covers loading time.
+      this.updatePoster(director.posterUrl);
+
+      // Load preload video
+      const preloadEl = this.videos.preload;
+      const activeEl = this.videos.active;
       const preloadHasCorrectSrc =
-        this.videos.preload.src.indexOf(director.videoUrl) >= 0 &&
-        director.videoUrl;
+        director.videoUrl && preloadEl.src.indexOf(director.videoUrl) >= 0;
 
       if (!preloadHasCorrectSrc) {
-        this.setVideoSrc(this.videos.preload, director.videoUrl);
+        this.setVideoSrc(preloadEl, director.videoUrl);
       }
 
-      this.playSafe(this.videos.preload);
+      this.playSafe(preloadEl);
 
-      // Crossfade
+      // Crossfade, gated on canplay unless instant.
+      const myFadeId = ++this.fadeCounter;
+
+      const doFade = () => {
+        if (myFadeId !== this.fadeCounter) return; // superseded by a newer show()
+        activeEl.style.opacity = '0';
+        preloadEl.style.opacity = '1';
+      };
+
       if (instant) {
-        this.videos.active.style.opacity = '0';
-        this.videos.preload.style.opacity = '1';
+        doFade();
+      } else if (preloadEl.readyState >= 3) {
+        requestAnimationFrame(doFade);
       } else {
-        requestAnimationFrame(() => {
-          this.videos.active.style.opacity = '0';
-          this.videos.preload.style.opacity = '1';
-        });
+        const onReady = () => {
+          cleanup();
+          doFade();
+        };
+        const timeoutId = setTimeout(() => {
+          cleanup();
+          doFade(); // safety fallback — poster covers if video still blank
+        }, this.opts.crossfadeTimeoutMs);
+        const cleanup = () => {
+          preloadEl.removeEventListener('canplay', onReady);
+          clearTimeout(timeoutId);
+        };
+        preloadEl.addEventListener('canplay', onReady, { once: true });
       }
 
-      // Swap roles: preload becomes new active, active becomes new preload
-      const tmp = this.videos.active;
-      this.videos.active = this.videos.preload;
-      this.videos.preload = tmp;
+      // Swap roles — preload becomes new active, active becomes new preload.
+      this.videos.active = preloadEl;
+      this.videos.preload = activeEl;
+    }
+
+    updatePoster(posterUrl) {
+      if (!this.poster) return;
+      if (!posterUrl) return;
+      if (this.poster.getAttribute('src') === posterUrl) return;
+      this.poster.setAttribute('src', posterUrl);
     }
 
     setVideoSrc(videoEl, src) {
@@ -294,7 +353,17 @@
       const p = videoEl.play();
       if (p && typeof p.catch === 'function') {
         p.catch(() => {
-          /* autoplay may be blocked; the crossfade still occurs */
+          // Autoplay may be blocked momentarily. Retry once canplay fires.
+          videoEl.addEventListener(
+            'canplay',
+            () => {
+              const retry = videoEl.play();
+              if (retry && typeof retry.catch === 'function') {
+                retry.catch(() => {});
+              }
+            },
+            { once: true }
+          );
         });
       }
     }

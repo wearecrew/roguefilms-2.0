@@ -58,32 +58,40 @@ body.page-talent
 
     Div Block                   class: talent_bg
       position: absolute, inset: 0, overflow: hidden, z-index: 0
-      → background-color: color/primitive/black (fallback behind videos)
+      background-color: color/primitive/black (fallback behind poster)
 
-      HTML Embed                   (put both <video> tags in one Embed)
-      ┌────────────────────────────────────────────────────────────────┐
-      │ <video data-rogue-talent-bg="active"                           │
-      │        class="talent_bg-video is-active"                       │
-      │        muted loop playsinline preload="auto"></video>          │
-      │                                                                │
-      │ <video data-rogue-talent-bg="preload"                          │
-      │        class="talent_bg-video is-preload"                      │
-      │        muted loop playsinline preload="auto"></video>          │
-      │                                                                │
-      │ <style>                                                        │
-      │   .talent_bg-video {                                           │
-      │     position: absolute; inset: 0;                              │
-      │     width: 100%; height: 100%;                                 │
-      │     object-fit: cover;                                         │
-      │     transition: opacity var(--motion-duration-normal, 300ms)   │
-      │                         var(--motion-easing-standard,           │
-      │                             cubic-bezier(0.4, 0, 0.2, 1));     │
-      │   }                                                            │
-      │   .talent_bg-video.is-active  { opacity: 1; }                  │
-      │   .talent_bg-video.is-preload { opacity: 0; }                  │
-      │ </style>                                                       │
-      └────────────────────────────────────────────────────────────────┘
-      (no src= on either video — the controller sets it on init and swap)
+      HTML Embed                   (poster + both <video> tags + styling)
+      ┌────────────────────────────────────────────────────────────────────┐
+      │ <!-- Poster img: always visible behind the videos. The controller  │
+      │      swaps src on each director change. Covers loading/buffering   │
+      │      time so there's no black flash. -->                           │
+      │ <img data-rogue-talent-poster class="talent_bg-poster" alt="" />   │
+      │                                                                    │
+      │ <video data-rogue-talent-bg="active"                               │
+      │        class="talent_bg-video"                                     │
+      │        muted loop playsinline preload="auto"></video>              │
+      │                                                                    │
+      │ <video data-rogue-talent-bg="preload"                              │
+      │        class="talent_bg-video"                                     │
+      │        muted loop playsinline preload="auto"></video>              │
+      │                                                                    │
+      │ <style>                                                            │
+      │   .talent_bg-poster,                                               │
+      │   .talent_bg-video {                                               │
+      │     position: absolute; inset: 0;                                  │
+      │     width: 100%; height: 100%;                                     │
+      │     object-fit: cover;                                             │
+      │   }                                                                │
+      │   .talent_bg-poster { opacity: 1; }                                │
+      │   .talent_bg-video {                                               │
+      │     opacity: 0;   /* controller fades up once canplay fires */     │
+      │     transition: opacity var(--motion-duration-normal, 300ms)       │
+      │                          var(--motion-easing-standard,             │
+      │                              cubic-bezier(0.4, 0, 0.2, 1));       │
+      │   }                                                                │
+      │ </style>                                                           │
+      └────────────────────────────────────────────────────────────────────┘
+      (no src= on any element — controller sets them on init and swap)
 
       Div Block                 class: talent_bg-dim
         position: absolute, inset: 0, pointer-events: none
@@ -203,6 +211,7 @@ For the Collection List items (dynamic attributes), toggle *Get value from* and 
 | Filter pill #4 | `data-rogue-talent-filter` | static: `reset` |
 | `.talent_link` **or** `.talent_item` | `data-rogue-director` | CMS: Current Director → Slug |
 | `.talent_link` **or** `.talent_item` | `data-rogue-video-url` | CMS: Current Director → Hero showreel → Rollover Video Url |
+| `.talent_link` **or** `.talent_item` | `data-rogue-poster-url` | CMS: Current Director → Hero showreel → Poster image → URL |
 
 The controller accepts these attributes on either the Collection Item wrapper (`.talent_item`, a `<div>`) or the Link Block inside (`.talent_link`, an `<a>`). It uses whichever element has them.
 
