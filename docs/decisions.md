@@ -4,6 +4,35 @@ Running record of architectural and project decisions, with rationale. Append ne
 
 ---
 
+## 2026-04-18 · Phase 1 complete — Webflow Tokens collection populated (49 variables, 3 modes)
+
+**Outcome.** `Tokens` collection (`collection-d1ebecc4-8a57-3cd3-4515-853ab0874009`) now contains 49 variables across three modes:
+
+- 13 colour (5 primitives + 8 semantics), semantics reference primitives via `existing_variable_id`; `color/border/subtle` stores `rgba(241,242,235,0.3)` as `custom_value`.
+- 2 font family, 3 weight, 3 line-height.
+- 9 type-size with distinct per-mode values for Mobile/Tablet/Desktop (8 tokens with real variation, `body-xl` stable at 1.25rem).
+- 10 spacing tokens, same value across all modes (structural consistency).
+- 1 radius, 5 breakpoint, 3 motion duration.
+- 3 motion easings intentionally NOT in Webflow — Webflow Size variables reject `cubic-bezier()`. Easings stay in `tokens.json` for Figma; they'll land as CSS custom properties in site-wide custom code in Phase 2.
+
+**Mode behaviour confirmed.** Creating a variable with a single `static_value` in a multi-mode collection auto-propagates that value to every mode (Mobile/Tablet/Desktop). Subsequent `update_size_variable` with a specific `mode_id` overrides only that mode; unupdated modes continue to show the default. This is what Dan anticipated (Q1 resolved). Verified by inspecting `type-size/display-xl` with `include_all_modes: true` — Mobile carries the propagated 3.5rem default, Tablet shows the 4.5rem update, Desktop shows 7.5rem.
+
+**Implementation shape (record for future sessions).**
+
+1. Add modes to collection via `create_variable_mode` (3 calls).
+2. Create primitives and non-reference tokens with single `static_value` (1 batched call, 32 vars).
+3. Create semantic colours with `existing_variable_id` referencing primitives; create multi-mode size variables with the Mobile value as the default (1 batched call, 17 vars).
+4. `update_size_variable` per (variable × mode) for Tablet and Desktop of the 8 type-size tokens that vary (1 batched call, 16 updates).
+
+Total: 4 MCP calls. All aliases hold across modes (verified).
+
+**What's left for Phase 2 setup.**
+
+- Dan to import `docs/tokens.json` via Crew Token Bridge plugin (DTCG format). Produces 9 separate Figma collections.
+- Site Settings → Custom Code → Head: drop in the three motion-easing CSS custom properties plus the `<script src>` tag for the video controller.
+
+---
+
 ## 2026-04-18 · Crew Token Bridge plugin format: DTCG, not the hybrid in the brief
 
 **Finding (after reading the plugin source at `reference/crew-token-bridge/`).** The plugin supports two formats, both nested-object: **Style Dictionary** (`{ "color": { "navy": { "value": "#00162c", "type": "color" } } }`) and **W3C DTCG** (`{ "color": { "navy": { "$value": "#00162c", "$type": "color" } } }`). Detection is by presence of a `$value` anywhere in the tree.

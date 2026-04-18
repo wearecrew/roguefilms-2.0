@@ -118,11 +118,18 @@ Skills under `/skills/` are how we codify repeating patterns for future Claude s
 
 Update this section regularly. It's the first thing anyone reads when picking the project up.
 
-**Current phase:** Phase 1 re-spec written; awaiting test-import validation (2026-04-18).
+**Current phase:** Phase 1 complete. Ready to start Phase 2 (Talent page).
 
-**Reset context:** First Phase 1 implementation invalidated. Webflow Tokens collection empty. Spec rewritten at [docs/design-system.md](docs/design-system.md) with three-mode responsive variables (no `clamp()`) and consistent scale-based naming. Reasons in [docs/decisions.md](docs/decisions.md).
-
-**Next immediate step:** Dan test-imports [docs/tokens-test.json](docs/tokens-test.json) via the Crew Token Bridge plugin. If it produces 3 clean collections (Color, Type-Size, Type-Family) with the expected tokens, we proceed to writing the full `docs/tokens.json`. If it produces a broken structure like the previous attempt, we investigate the plugin source and adjust the format.
+**Phase 1 deliverables (2026-04-18):**
+- Design system spec at [docs/design-system.md](docs/design-system.md) — two-tier (primitive + semantic) naming, consistent scale, responsive-patterns section.
+- Machine-readable [docs/tokens.json](docs/tokens.json) in W3C DTCG format — imports cleanly via Crew Token Bridge after validating parser behaviour in `reference/crew-token-bridge/`.
+- Webflow `Tokens` collection populated with **49 variables** across 3 modes (Mobile / Tablet / Desktop):
+  - 13 colour (5 primitives + 8 semantics, aliased via `existing_variable_id`)
+  - 2 font family, 3 weight, 3 line-height
+  - 9 type-size with distinct per-mode values (Mobile/Tablet/Desktop)
+  - 10 spacing (same values across modes; three-mode structure retained for consistency)
+  - 1 radius, 5 breakpoints, 3 motion durations
+- 3 motion easings defined in `docs/tokens.json` for Figma; in Webflow they drop into site-wide CSS custom properties in Phase 2.
 
 **Done:**
 - Site duplicated as Roguefilms 2.0 (CMS fully populated, 700+ showreels, directors, news inherited).
