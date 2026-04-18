@@ -118,7 +118,9 @@ Skills under `/skills/` are how we codify repeating patterns for future Claude s
 
 Update this section regularly. It's the first thing anyone reads when picking the project up.
 
-**Current phase:** Phase 1 complete (foundation populated). Ready to start Phase 2.
+**Current phase:** Phase 1 being re-done after reset (2026-04-18).
+
+**Reset context:** First Phase 1 implementation invalidated. Webflow Tokens collection wiped. Spec (`docs/design-system.md`) and `docs/tokens.json` cleared. Reasons in [docs/decisions.md](docs/decisions.md). Re-running Phase 1 with three-mode responsive variables and a tested plugin-import format.
 
 **Done:**
 - Site duplicated as Roguefilms 2.0 (CMS fully populated, 700+ showreels, directors, news inherited).
@@ -126,23 +128,16 @@ Update this section regularly. It's the first thing anyone reads when picking th
 - Design walkthrough of six key Figma frames, architectural decisions locked.
 - Vimeo plan confirmed (Pro, HLS available).
 - Full Figma extraction: all 7 desktop frames (1728px canvas) + all 7 mobile frames (402px canvas).
-- **Phase 1 foundation:**
-  - Design system spec at [docs/design-system.md](docs/design-system.md) (human-readable, with rationale and responsive patterns).
-  - Machine-readable [docs/tokens.json](docs/tokens.json) in Crew Token Bridge format, imported to Figma.
-  - Webflow `Tokens` collection populated with **45 variables**: 9 colour, 2 font family, 3 font weight, 9 font size (with fluid clamps), 3 line height, 10 spacing, 1 radius, 5 breakpoint, 3 motion duration.
-  - Motion easings (3) defined as CSS custom properties, to be added to Site Custom Code in Phase 2.
-  - Token names are usage-explicit (`page-title`, `thumbnail-title`, `background/page`, `spacing/20` etc. — not `display-1` or `spacing/md-plus`).
 
-**In flight:**
-- GitHub repo `wearecrew/roguefilms-2.0` in place as single source of truth for docs and code.
+**In flight (Phase 1, attempt 2):**
+1. Clean-slate: Webflow Tokens collection empty. Previous spec/tokens.json deleted.
+2. Research: industry token naming conventions (Material / Polaris / Atlassian three-tier model), and any relevant skills in this Code environment.
+3. New spec at `docs/design-system.md` with primitive → semantic naming, three-mode responsive tokens (no clamp()).
+4. Test import: `docs/tokens-test.json` with 3 tokens — validate Crew Token Bridge parses the format before emitting the full spec.
+5. Full `docs/tokens.json`. Dan imports via plugin.
+6. Webflow populated via MCP: three modes on the collection, discrete per-mode values, `existing_variable_id` references for semantics.
 
-**Next up (Phase 2: Talent page):**
-1. Create the sitewide custom-code shell in Webflow Site Settings → Custom Code → Head/Footer (including the motion-easing CSS custom properties and a `<script src>` tag pointing at the video controller).
-2. Build `talent-v2` page in the Designer using the token collection. Layout per Figma: three columns of director names over a full-bleed background video.
-3. Write the video controller module at `code/video-controller.js` with the "background swap" mode for the Talent page.
-4. Serve the controller via jsDelivr (`https://cdn.jsdelivr.net/gh/wearecrew/roguefilms-2.0@main/code/video-controller.js`).
-5. Add per-page init script in Talent page's custom code.
-6. Playwright test: load behaviour, hover swap, auto-rotate, reduced-motion compliance.
+**Then (Phase 2: Talent page):** sitewide custom-code shell, `talent-v2` page build, video controller JS, Playwright tests.
 
 **Resolved (Phase 0 walkthrough):**
 - Vimeo plan: Pro. HLS streams are available on Pro accounts via the Player API. We can use HLS for the talent page background video and grid hover loops. Direct progressive MP4 also available as fallback.

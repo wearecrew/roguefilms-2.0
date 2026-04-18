@@ -4,6 +4,25 @@ Running record of architectural and project decisions, with rationale. Append ne
 
 ---
 
+## 2026-04-18 · Phase 1 reset. Token implementation restarted with three-mode responsive variables and no clamp()
+
+**Decision.** Abandon the first Phase 1 token implementation. Clean the Webflow `Tokens` collection and restart with:
+- **Three explicit modes** on responsive token collections (Mobile / Tablet / Desktop), not `clamp()` formulas inside a single-mode collection. Figma and Webflow hold three discrete values per responsive token.
+- **Scale-based, three-tier naming** (primitive → semantic → component) instead of the mixed situational/generic scheme. Consistent token scale (`display-xl`, `display-lg`, `body-md`, etc.) for typography. Pixel-named spacing kept (`space/8`, `space/16`) but expressed per-mode.
+- **Test-import first**: ship a 3-token `docs/tokens-test.json` to validate the Crew Token Bridge plugin parser before committing to the full `tokens.json`. Earlier imports produced a broken "groups" collection rather than per-category collections — the full spec doesn't re-run until the plugin proves it can parse the format.
+- **Motion easings stay as CSS custom properties** (not Webflow Variables), to be added in Site Settings → Custom Code → Head when Phase 2 lands. Webflow's Size variable type rejects `cubic-bezier()`.
+
+**Why.** Three fundamental problems surfaced during implementation review: (a) the Crew Token Bridge plugin collapsed the import into a single `groups` collection with numeric placeholder names instead of splitting by category, invalidating the Figma side; (b) Webflow Variables receiving `clamp()` values feel like lossy translation of what should be a three-mode system — designers want discrete Mobile/Tablet/Desktop values they can see and override per breakpoint, not a single opaque formula; (c) the naming was inconsistent — some tokens named by the single page role they served (`page-title`, `thumbnail-title`), others by raw value (`spacing/20`), with no coherent scale underneath.
+
+**Alternatives considered.**
+- Keep the clamp() approach and ship as-is. Rejected: clamp() doesn't give design the ability to deviate per breakpoint for a single token; it bakes interpolation into the variable. Designers can't see the tablet value they're working against.
+- Keep situational naming. Rejected: names like `thumbnail-title` over-scope tokens to one use and break down when a future component needs the same size for a different purpose.
+- Mixed semantic + t-shirt scale for spacing. Rejected in favour of px-named spacing, since the Figma spacing values are a short, specific set (8, 10, 15, 16, 20, 24, 32, 40, 80, 120) that doesn't map cleanly to a t-shirt scale — naming by px is honest and non-boxing.
+
+**Cost of the reset.** ~4 hours of spec writing and MCP operations written off, plus one round of Figma re-import for Dan. Mitigated by doing a small test import before the full run this time.
+
+---
+
 ## 2026-04-18 · Video controller hosted via jsDelivr from GitHub, not Webflow inline
 
 **Decision.** The video controller JS lives at `/code/video-controller.js` in the `wearecrew/roguefilms-2.0` repo. It's served to the live site via jsDelivr's CDN (`https://cdn.jsdelivr.net/gh/wearecrew/roguefilms-2.0@main/code/video-controller.js`). Webflow's Site Settings > Custom Code > Footer carries a single `<script src="...">` tag pointing to this URL.
