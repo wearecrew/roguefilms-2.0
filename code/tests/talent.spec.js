@@ -10,7 +10,7 @@ const { test, expect } = require('@playwright/test');
  * in this file will fail at the navigation step — that's the expected signal.
  */
 
-const TALENT_PATH = '/talent-v2';
+const TALENT_PATH = '/talent';
 
 test.describe('Talent page: loads + DOM contract', () => {
   test('page renders the controller root and background videos', async ({ page }) => {
