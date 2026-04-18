@@ -194,7 +194,7 @@ All values in px (Webflow will store in rem, converting ÷16 at import time; Fig
 
 | Token | Mobile | Tablet | Desktop | Role |
 |---|---|---|---|---|
-| `type-size/display-xl` | 56 | 88 | 120 | Page H1s (Talent, Joe Connor, Music Video, Film & TV, We are rogue) |
+| `type-size/display-xl` | 56 | 72 | 120 | Page H1s (Talent, Joe Connor, Music Video, Film & TV, We are rogue) |
 | `type-size/display-lg` | 32 | 48 | 72 | Homepage pink statement, News section heading |
 | `type-size/heading-xl` | 32 | 34 | 36 | Major section heading (Contact "Offices") |
 | `type-size/heading-lg` | 24 | 28 | 32 | Subsection heading (Contact "London") |
@@ -245,7 +245,7 @@ All values identical across modes — the spacing scale is invariant; it's compo
 
 | Token | Value | Usage |
 |---|---|---|
-| `radius/pill` | 9999px | All pill-shaped elements: filter pills, search input, back button, copy-link, genre dropdown. `9999px` semantically means "fully rounded, regardless of element size". |
+| `radius/pill` | 100px | All pill-shaped elements: filter pills, search input, back button, copy-link, genre dropdown. Figma-sourced value. |
 
 No other radii appear in Figma. Tile images have square corners.
 
@@ -358,21 +358,22 @@ Blockers: need to verify the parser handles the JSON shape correctly — see the
 
 Flagged for Dan to resolve before Step B (Webflow population). Defaults shown where possible.
 
-1. **Webflow mode behaviour when creating a variable without explicit per-mode values.** My plan is to create primitive/non-responsive variables with a single default value, and have Webflow auto-propagate that value across Mobile/Tablet/Desktop modes. If Webflow instead stores the value only in the "default" mode and leaves others empty, I'll need to update each variable three times (once per mode) to set identical values. This affects the implementation approach, not the spec. I'll test during Step B and adapt.
+### Resolved (2026-04-18)
 
-2. **Is `color/text/inverse` needed?** Rogue is a dark-themed site; the one case of "dark text on light surface" is black text on the pink overlay — covered by `color/text/on-overlay`. No classic `text/inverse` (dark-text-on-white) use case exists. **Default: do not create.** Flag if wrong.
+- ~~**Q1: Webflow mode propagation**~~ — Confirmed: Webflow propagates values across modes when not explicitly defined. Single default value on non-responsive tokens is sufficient.
+- ~~**Q2: Is `color/text/inverse` needed?**~~ — No. Rogue is dark-themed with no dark-text-on-white use case; black-on-pink covered by `color/text/on-overlay`.
+- ~~**Q4: Radius 9999px vs 100px?**~~ — 100px. Matches Figma source value.
+- ~~**Q7: Tablet display-xl value?**~~ — 72px (current value in the spec).
 
-3. **Additional semantic surfaces.** Talent page uses `primitive/black` as its page base (distinct from `primitive/navy` used elsewhere). Options: (a) leave as inline `primitive/black`, (b) add `color/surface/inverse` → black. **Default: (a) inline.** Talent page is one use case; tokenising for one page is premature.
+### Still open
 
-4. **Radius 9999px vs 100px.** Using `9999px` in `radius/pill` preserves the "fully rounded" intent regardless of element size. Works identically to 100px for pill-shaped elements under 9999px wide, which is all of them. **Default: 9999px.** Flag if preference.
+3. **Additional semantic surfaces (Talent page black).** Talent uses `primitive/black` distinct from the usual navy. Options: (a) inline `primitive/black`, (b) add `color/surface/inverse` → black. **Default: (a) inline.** Talent is one page; tokenising for a single use is premature.
 
-5. **Talent page background and hero wordmark at mobile.** Figma shows a homepage-style hero block full-bleed. No `surface/hero` token — inline as needed. **Default: don't tokenise.**
+5. **Talent page hero treatment at mobile.** Full-bleed hero block. No `surface/hero` token. **Default: inline; don't tokenise.**
 
-6. **Line-height role for `display-xl` at mobile.** Figma inconsistency — director/music-video/film&TV use `leading-[0.9]`, Talent uses `leading-none` (1). **Default: use `type-line-height/tight` (1.0) across; 0.1 at 56px is a 5.6px difference, unlikely to be noticed.**
+6. **Line-height for `display-xl` at mobile.** Figma inconsistency — some pages use `leading-[0.9]`, Talent uses `leading-none` (1). **Default: use `type-line-height/tight` (1.0) across.** The 0.1 difference at 56px ≈ 5.6px, unlikely to be noticed.
 
-7. **Tablet display-xl value.** Linear interpolation gives 74; rounded to 72 for scale tidiness. Flag if a closer-to-desktop value (80 or 88) is preferred.
-
-8. **Mobile hamburger drawer UX.** Not designed. **Default: defer to Phase 2 when building the Talent page.**
+8. **Mobile hamburger drawer UX.** Not designed. **Default: defer to Phase 2.**
 
 ---
 

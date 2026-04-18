@@ -4,6 +4,24 @@ Running record of architectural and project decisions, with rationale. Append ne
 
 ---
 
+## 2026-04-18 · Crew Token Bridge plugin parser doesn't match documented JSON schema
+
+**Observation.** Test-importing a minimal 3-token JSON in the documented Crew Token Bridge format (`{ options: {}, groups: [{ name, tokens: [...] }] }`) produced a broken result:
+
+- A single collection named "groups" was created (the plugin treated the top-level `groups` key as a collection name).
+- Variables were named by their numeric array index (`0`) rather than by the `path` field.
+- Variable paths were constructed by walking the JSON tree: `groups / 0 / tokens / 0` for the first colour, `groups / 2 / tokens / 0` for the font.
+- The multi-mode group (index 1, `type-size`) was silently dropped — likely the `modes` + `values` structure wasn't recognised.
+- `value` content parsed correctly (hex and string values rendered as expected); only the schema interpretation failed.
+
+**Implication.** The plugin walks the JSON as a generic nested-object tree rather than parsing the documented `groups` / `name` / `tokens` / `path` schema. The parser appears to expect a shape more like DTCG (`{ color: { navy: { value: "#..." } } }`) or Style Dictionary nested objects, where top-level keys become collections and nested keys become variable path segments.
+
+**Decision.** Halt token import work until the plugin source (`ui.html`, `code.js`) is shared so the actual parser can be inspected. Speculating on the format is wasteful — three iterations of format-guessing is worse than one iteration of reading the source.
+
+**Action.** Dan to drop plugin source into `reference/crew-token-bridge/` in the repo, or paste the `importTokens` / `parseJSON` handler inline. Spec + Webflow implementation are paused on this.
+
+---
+
 ## 2026-04-18 · Phase 1 reset. Token implementation restarted with three-mode responsive variables and no clamp()
 
 **Decision.** Abandon the first Phase 1 token implementation. Clean the Webflow `Tokens` collection and restart with:
