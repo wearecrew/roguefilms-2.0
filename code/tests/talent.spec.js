@@ -50,7 +50,14 @@ test.describe('Talent page: loads + DOM contract', () => {
       'data-rogue-is-rebel',
       /^(true|false)?$/
     );
-    await expect(first, 'director link has an href').toHaveAttribute('href', /.+/);
+    // The director element might be an <a> itself, or wrap one (Webflow
+    // Collection Item pattern). Either way we need an href somewhere inside.
+    const hrefSource = await first.evaluate((el) => {
+      if (el.tagName === 'A') return el.getAttribute('href');
+      const anchor = el.querySelector('a[href]');
+      return anchor ? anchor.getAttribute('href') : null;
+    });
+    expect(hrefSource, 'director element or descendant <a> has an href').toMatch(/.+/);
   });
 
   test('RogueFilms module is loaded via jsDelivr', async ({ page }) => {
@@ -230,11 +237,17 @@ test.describe('Talent page: navigation', () => {
     await page.goto(TALENT_PATH);
     await page.waitForTimeout(500);
 
-    const firstLink = page.locator('[data-rogue-director]').first();
-    const href = await firstLink.getAttribute('href');
-    expect(href, 'director link has an href').toBeTruthy();
+    const first = page.locator('[data-rogue-director]').first();
+    const href = await first.evaluate((el) => {
+      if (el.tagName === 'A') return el.getAttribute('href');
+      const anchor = el.querySelector('a[href]');
+      return anchor ? anchor.getAttribute('href') : null;
+    });
+    expect(href, 'director has navigable href (self or descendant <a>)').toBeTruthy();
 
-    await firstLink.click();
+    // Click the anchor or the element, whichever has the href
+    const clickTarget = await first.evaluate((el) => el.tagName === 'A') ? first : first.locator('a[href]').first();
+    await clickTarget.click();
     await page.waitForURL((url) => url.pathname === href, { timeout: 10_000 });
     expect(page.url()).toContain(href);
   });

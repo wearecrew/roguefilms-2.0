@@ -201,9 +201,28 @@ For the Collection List items (dynamic attributes), toggle *Get value from* and 
 | Filter pill #2 | `data-rogue-talent-filter` | static: `rogue` |
 | Filter pill #3 | `data-rogue-talent-filter` | static: `rebel` |
 | Filter pill #4 | `data-rogue-talent-filter` | static: `reset` |
-| `.talent_link` | `data-rogue-director` | CMS: Current Director → Slug |
-| `.talent_link` | `data-rogue-video-url` | CMS: Current Director → Hero showreel → Rollover Video Url |
-| `.talent_link` | `data-rogue-is-rebel` | CMS: Current Director → Is a Rebel (boolean) |
+| `.talent_link` **or** `.talent_item` | `data-rogue-director` | CMS: Current Director → Slug |
+| `.talent_link` **or** `.talent_item` | `data-rogue-video-url` | CMS: Current Director → Hero showreel → Rollover Video Url |
+
+The controller accepts these attributes on either the Collection Item wrapper (`.talent_item`, a `<div>`) or the Link Block inside (`.talent_link`, an `<a>`). It uses whichever element has them.
+
+### Rebel detection (Webflow boolean quirk)
+
+**Problem**: Webflow's boolean→custom-attribute-value binding emits empty string for both true and false (known quirk), so we can't use a direct `data-rogue-is-rebel="true"` attribute on the Link Block driven by the CMS boolean.
+
+**Solution**: add a child marker with **Conditional Visibility**. Inside each Collection Item, add a small Div (or Span) with the class `is-rebel-marker` (no display needed — visibility handles it):
+
+1. Select the Div → Element settings → **Conditional Visibility**
+2. Condition: *Is a Rebel* **is set** → Element is visible.
+
+Result: Webflow renders the marker with class `w-condition-invisible` on non-rebels and without it on rebels. The controller checks `querySelector('.is-rebel-marker:not(.w-condition-invisible)')` to determine rebel-ness per director.
+
+The marker element can be zero-dimension:
+```html
+<!-- in each .talent_item -->
+<span class="is-rebel-marker" style="display:none"></span>
+```
+Inline `display:none` is fine — Webflow's Conditional Visibility is what actually toggles the `w-condition-invisible` class, and the controller reads the class, not the computed style.
 
 **Note on the boolean attribute**: Webflow renders boolean CMS fields as `true` / `false` strings when used as attribute values, which is exactly what the controller expects. If the field is empty/unset, it renders as empty string — the controller treats that as `false`.
 

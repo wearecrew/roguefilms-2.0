@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.2.0-phase2';
+  const VERSION = '0.3.0-phase2';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -131,14 +131,39 @@
         return;
       }
 
-      this.directors = this.directorEls.map((el, i) => ({
-        id: el.dataset.rogueDirector,
-        name: (el.textContent || '').trim(),
-        videoUrl: el.dataset.rogueVideoUrl || '',
-        isRebel: el.dataset.rogueIsRebel === 'true',
-        el,
-        index: i,
-      }));
+      this.directors = this.directorEls.map((el, i) => {
+        // Click target: if the director element is itself an <a>, use it;
+        // otherwise look for an <a> descendant (Webflow pattern where the
+        // Collection Item wraps a Link Block).
+        const anchor = el.tagName === 'A' ? el : el.querySelector('a[href]');
+        const href = anchor ? anchor.getAttribute('href') : null;
+
+        // is-rebel detection. Webflow's boolean→custom-attribute-value
+        // binding emits empty for both true and false, so the attribute
+        // alone isn't reliable. Fall back to a conditionally-rendered
+        // marker element (a child with class .is-rebel-marker or attribute
+        // data-rogue-rebel-marker; Webflow's Conditional Visibility keeps
+        // the element in the DOM but adds class w-condition-invisible when
+        // the condition is false).
+        const attrSaysRebel = el.dataset.rogueIsRebel === 'true';
+        const marker = el.querySelector(
+          '[data-rogue-rebel-marker], .is-rebel-marker'
+        );
+        const markerSaysRebel =
+          !!marker && !marker.classList.contains('w-condition-invisible');
+        const isRebel = attrSaysRebel || markerSaysRebel;
+
+        return {
+          id: el.dataset.rogueDirector,
+          name: (el.textContent || '').trim(),
+          videoUrl: el.dataset.rogueVideoUrl || '',
+          isRebel,
+          href,
+          anchor,
+          el,
+          index: i,
+        };
+      });
 
       this.state = {
         activeIndex: 0,
@@ -154,6 +179,14 @@
       this.show(0, { instant: true });
       this.queuePreload(this.nextIndexInFilter(0));
       if (!this.state.reducedMotion) this.startAutoRotate();
+
+      console.info(
+        '[RogueFilms] talent controller initialised — ' +
+          this.directors.length +
+          ' directors, ' +
+          this.directors.filter((d) => d.isRebel).length +
+          ' rebels detected'
+      );
     }
 
     prepareVideoElements() {
