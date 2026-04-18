@@ -211,7 +211,19 @@ For the Collection List items (dynamic attributes), toggle *Get value from* and 
 | Filter pill #4 | `data-rogue-talent-filter` | static: `reset` |
 | `.talent_link` **or** `.talent_item` | `data-rogue-director` | CMS: Current Director → Slug |
 | `.talent_link` **or** `.talent_item` | `data-rogue-video-url` | CMS: Current Director → Hero showreel → Rollover Video Url |
-| `.talent_link` **or** `.talent_item` | `data-rogue-poster-url` | CMS: Current Director → Hero showreel → Poster image → URL |
+
+### Poster image (Webflow image-binding workaround)
+
+Webflow doesn't expose image-field URLs to custom-attribute bindings. Workaround: put a hidden `<img>` inside each `.talent_item`, bound via Webflow's **native image binding** (not a custom attribute). The controller reads its `src`.
+
+Inside each `.talent_item`:
+
+1. Add an **Image** element (Webflow's native Image, not an HTML Embed).
+2. In the Image settings → **Get image from** → *Current Director → Hero showreel → Poster image*.
+3. Add a custom attribute on the Image: name `data-rogue-poster`, value `true` (any placeholder — the controller queries for attribute presence, not value).
+4. Give it a class `talent_item-poster`. Style: `display: none;` (the controller only needs its `src`, not the pixels). Webflow still renders the `<img>` tag server-side with the correct CMS URL, and the browser may preload it.
+
+Result: each `.talent_item` has `<img data-rogue-poster src="...cms-image-url" style="display:none">` inside. The controller reads `src` from that img for the poster layer.
 
 The controller accepts these attributes on either the Collection Item wrapper (`.talent_item`, a `<div>`) or the Link Block inside (`.talent_link`, an `<a>`). It uses whichever element has them.
 

@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.4.0-phase2';
+  const VERSION = '0.4.1-phase2';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -160,11 +160,25 @@
           !!marker && !marker.classList.contains('w-condition-invisible');
         const isRebel = attrSaysRebel || markerSaysRebel;
 
+        // Poster URL — Webflow doesn't expose image-field URLs to custom
+        // attribute bindings, so the idiomatic path is a hidden native <img>
+        // inside each Collection Item bound via Webflow's image binding.
+        // We read its src. A plain data-rogue-poster-url attribute is still
+        // accepted as a fallback for non-Webflow contexts or if someone
+        // wires it up manually.
+        const posterImg = el.querySelector(
+          'img[data-rogue-poster], img.talent_item-poster'
+        );
+        const posterUrl =
+          (posterImg && (posterImg.currentSrc || posterImg.src)) ||
+          el.dataset.roguePosterUrl ||
+          '';
+
         return {
           id: el.dataset.rogueDirector,
           name: (el.textContent || '').trim(),
           videoUrl: el.dataset.rogueVideoUrl || '',
-          posterUrl: el.dataset.roguePosterUrl || '',
+          posterUrl,
           isRebel,
           href,
           anchor,
