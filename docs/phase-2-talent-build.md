@@ -128,30 +128,34 @@ body.page-talent
         items per page: 100 (should cover all directors)
 
         Collection List         class: talent_list
-          display: grid, grid-template-columns: repeat(3, 1fr) (desktop),
-                  repeat(1, 1fr) (mobile), column-gap spacing/40, row-gap spacing/24
+          display: grid,
+                  grid-template-columns: repeat(3, 1fr) (desktop),
+                                         repeat(2, 1fr) (tablet),
+                                         1fr           (mobile),
+                  column-gap: spacing/40, row-gap: spacing/24
 
-          Collection Item       class: talent_list-item
+          Collection Item       class: talent_item
 
-            Link Block          class: director-name
+            Link Block          class: talent_link
               link: current director (page → Directors roster template)
+              display: block, text-decoration: none, cursor: pointer
               custom attrs:
-                data-rogue-director         = current director.slug
-                data-rogue-video-url        = current director.hero-showreel.video-url
-                data-rogue-is-rebel         = current director.is-a-rebel (as string "true"/"false")
+                data-rogue-director         = current director → Slug
+                data-rogue-video-url        = current director → Hero showreel → Rollover Video Url
+                data-rogue-is-rebel         = current director → Is a Rebel (boolean)
 
-              Text Block        class: director-name_text
-                text: current director.name
+              Text Block        class: talent_link-text
+                text: current director → Name
                 font: type-family/body Bold, type-size/body-xl (20px stable),
                       line-height tight, uppercase
                 color: color/text/primary
                 transition: color var(--motion-duration-fast) var(--motion-easing-standard)
 
-              /* Active state (when controller adds .is-active class to the link): */
-              &.is-active .director-name_text { color: color/text/accent; }
+              /* Active state (controller adds .is-active to the link on the active director): */
+              .talent_link.is-active .talent_link-text { color: color/text/accent; }
 
               /* Hover state: */
-              &:hover .director-name_text { color: color/text/accent; }
+              .talent_link:hover .talent_link-text { color: color/text/accent; }
 
   (footer — reuse the Footer component instance)
 ```
@@ -197,9 +201,9 @@ For the Collection List items (dynamic attributes), toggle *Get value from* and 
 | Filter pill #2 | `data-rogue-talent-filter` | static: `rogue` |
 | Filter pill #3 | `data-rogue-talent-filter` | static: `rebel` |
 | Filter pill #4 | `data-rogue-talent-filter` | static: `reset` |
-| Director link | `data-rogue-director` | CMS: Current Director → Slug |
-| Director link | `data-rogue-video-url` | CMS: Current Director → Hero showreel → Rollover Video Url |
-| Director link | `data-rogue-is-rebel` | CMS: Current Director → Is a Rebel (boolean) |
+| `.talent_link` | `data-rogue-director` | CMS: Current Director → Slug |
+| `.talent_link` | `data-rogue-video-url` | CMS: Current Director → Hero showreel → Rollover Video Url |
+| `.talent_link` | `data-rogue-is-rebel` | CMS: Current Director → Is a Rebel (boolean) |
 
 **Note on the boolean attribute**: Webflow renders boolean CMS fields as `true` / `false` strings when used as attribute values, which is exactly what the controller expects. If the field is empty/unset, it renders as empty string — the controller treats that as `false`.
 
