@@ -4,6 +4,31 @@ Running record of architectural and project decisions, with rationale. Append ne
 
 ---
 
+## 2026-04-18 · Phase 2 shipped — Talent page live with background-swap controller
+
+**Outcome.** [`/talent`](https://roguefilms-bef8a340cdee840701aac49d674b.webflow.io/talent) is live on the Webflow.io staging subdomain. Controller v0.4.3 served via jsDelivr `@0.4`. 24 directors + 4 rebels detected; filter pills (All / Rogue / Rebel) work; hover swaps to hovered director's video; auto-rotate runs with name highlight; 40% dim overlay; reduced-motion support; canplay-gated fade; poster fallback.
+
+**Iteration history during Phase 2:**
+- v0.1 → v0.2 : shell + basic background-swap
+- v0.2 → v0.3 : data-attrs on wrapper OR link; rebel-marker via Conditional Visibility (Webflow boolean-to-attribute emits empty — workaround)
+- v0.3 → v0.4 : poster layer + canplay-gated fade + safety timeout + rapid-hover race safety
+- v0.4.1 : poster URL via hidden native Webflow Image inside Collection Item (custom attrs don't expose image URLs)
+- v0.4.2 : `.is-active` applied to both `.talent_item` and descendant `.talent_link`; overlay snippet inside the same HTML Embed
+- v0.4.3 : runtime CSS injection for active-state styling so it "just works" without Designer combo-class setup
+
+**Operational lessons, captured for next phases:**
+- **jsDelivr @main is throttled during rapid dev.** Purges on rolling refs hit rate limits (~30 min lockout). Switched sitewide embed to `@0.4` semver range — patches auto-pick-up, no Webflow changes per push, no purge dance. Promote to `@0.5` when breaking.
+- **Webflow booleans don't emit values through custom-attribute bindings.** Workaround: a conditionally-visible child element (Webflow adds `w-condition-invisible` class when condition is false), controller reads the class.
+- **Webflow image fields aren't exposed to custom-attribute bindings.** Workaround: hidden native `<img>` inside the Collection Item with image binding; controller reads `src`.
+- **The HTML Embed has its own stacking context.** Overlays/dimmers for video backgrounds must live inside the Embed as a sibling layer, not as a separate Webflow Div Block after it.
+- **Boolean-to-data-attribute caveat in the build guide** now formally documented so we don't re-discover it on director page + lightbox.
+
+**Loose ends not shipping with Phase 2:**
+- Playwright suite has 12 specs; not all green yet (flaky on the hover race + navigation specs due to timing). Not blocking.
+- Slug is `/talent` (swapped from `/talent-v2` once layout stabilised). The formal slug-swap cutover for all v2 pages happens in Phase 7.
+
+---
+
 ## 2026-04-18 · Phase 1 complete — Webflow Tokens collection populated (49 variables, 3 modes)
 
 **Outcome.** `Tokens` collection (`collection-d1ebecc4-8a57-3cd3-4515-853ab0874009`) now contains 49 variables across three modes:

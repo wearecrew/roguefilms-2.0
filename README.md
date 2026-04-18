@@ -118,7 +118,7 @@ Skills under `/skills/` are how we codify repeating patterns for future Claude s
 
 Update this section regularly. It's the first thing anyone reads when picking the project up.
 
-**Current phase:** Phase 2 in flight — Talent page. Controller + tests shipped, Designer build pending.
+**Current phase:** Phase 2 shipped. Phase 3 (lightbox + work-detail) starting.
 
 **Phase 1 deliverables (2026-04-18):**
 - Design system spec at [docs/design-system.md](docs/design-system.md) — two-tier (primitive + semantic) naming, consistent scale, responsive-patterns section.
@@ -146,23 +146,19 @@ Update this section regularly. It's the first thing anyone reads when picking th
 5. Full `docs/tokens.json`. Dan imports via plugin.
 6. Webflow populated via MCP: three modes on the collection, discrete per-mode values, `existing_variable_id` references for semantics.
 
-**Phase 2 shipped so far:**
-- [`code/video-controller.js`](code/video-controller.js) — sitewide module served via jsDelivr. Injects motion-easing CSS vars and exposes `window.RogueFilms.initTalentPage()` with the full background-swap controller (crossfade, auto-rotate, filters, reduced-motion, tab-visibility).
-- [`code/init/site-footer.html`](code/init/site-footer.html) — single `<script src>` snippet for Site Settings → Custom Code → Footer.
-- [`code/init/talent-page.html`](code/init/talent-page.html) — per-page init script.
-- [`docs/technical-architecture.md`](docs/technical-architecture.md) — runtime structure, DOM contract, update flow.
-- [`docs/phase-2-talent-build.md`](docs/phase-2-talent-build.md) — step-by-step Designer build guide.
-- [`code/tests/talent.spec.js`](code/tests/talent.spec.js) — Playwright suite against the DOM contract.
-- Talent v2 page shell created in Webflow (slug `talent-v2`, page ID `69e3c6792fffaea7766fd272`).
+**Phase 2 shipped:**
+- [`code/video-controller.js`](code/video-controller.js) — sitewide module served via jsDelivr `@0.4`. Injects motion-easing CSS vars, active-state CSS, exposes `window.RogueFilms.initTalentPage()`.
+- Background-swap controller: crossfade with canplay-gated fade-in, poster layer, auto-rotate, filters, reduced-motion, tab-visibility, race-safe rapid hover.
+- Talent page live on [`/talent`](https://roguefilms-bef8a340cdee840701aac49d674b.webflow.io/talent) with 24 directors, 4 rebels, filter pills, Webflow CMS bindings.
+- Build guide ([`docs/phase-2-talent-build.md`](docs/phase-2-talent-build.md)) + Playwright suite ([`code/tests/talent.spec.js`](code/tests/talent.spec.js)).
 
-**Phase 2 to finish:**
-1. Add the sitewide `<script src>` tag to Webflow Site Settings → Custom Code → Footer (from `code/init/site-footer.html`).
-2. Build the Talent v2 page layout in the Designer per `docs/phase-2-talent-build.md` — includes the CMS Collection List bound to Directors rosters.
-3. Paste the per-page init script into the Talent v2 page custom code footer.
-4. Publish to staging.
-5. `npm install && npm test` to validate.
-
-**Then (Phase 3):** lightbox + work detail pattern.
+**Phase 3 kicking off now:** lightbox + work-detail page. Scope:
+- Rebuild the standalone `/director-showreels/[slug]` template in v2 styling.
+- Build a lightbox component triggered from any grid tile (any page). Uses Finsweet Smart Lightbox where it fits.
+- Controller gains a `lightbox` mode (full-quality video, audio, full-length file).
+- Next/previous navigation within the current list context.
+- Copy-link button (Finsweet copy-to-clipboard) copies the deep link to the standalone page.
+- Playwright suite for open, next/prev, escape-close, copy-link, anamorphic ratio.
 
 **Resolved (Phase 0 walkthrough):**
 - Vimeo plan: Pro. HLS streams are available on Pro accounts via the Player API. We can use HLS for the talent page background video and grid hover loops. Direct progressive MP4 also available as fallback.
