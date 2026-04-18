@@ -1,24 +1,28 @@
 {
-  "options": { "separateCollections": true },
-  "groups": [
-    {
-      "name": "color",
-      "tokens": [
-        { "path": "test-colour", "figmaType": "COLOR", "value": "#f25d78", "description": "Test" }
-      ]
-    },
-    {
-      "name": "type-size",
-      "modes": ["Mobile", "Tablet", "Desktop"],
-      "tokens": [
-        { "path": "test-size", "figmaType": "FLOAT", "values": { "Mobile": "16px", "Tablet": "18px", "Desktop": "20px" }, "description": "Test" }
-      ]
-    },
-    {
-      "name": "type-family",
-      "tokens": [
-        { "path": "test-font", "figmaType": "STRING", "value": "Test Font", "description": "Test" }
-      ]
+  "color": {
+    "$type": "color",
+    "test-colour": {
+      "$value": "#f25d78",
+      "$description": "Test"
     }
-  ]
+  },
+  "type-family": {
+    "$type": "fontFamily",
+    "test-font": {
+      "$value": "Test Font",
+      "$description": "Test"
+    }
+  },
+  "type-size": {
+    "$type": "dimension",
+    "$modes": ["Mobile", "Tablet", "Desktop"],
+    "test-size": {
+      "$values": {
+        "Mobile": "16px",
+        "Tablet": "18px",
+        "Desktop": "20px"
+      },
+      "$description": "Test"
+    }
+  }
 }
