@@ -29,7 +29,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.6.0-phase3';
+  const VERSION = '0.6.1-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -1008,6 +1008,11 @@
   // click pathways are independent — hover plays/pauses the rollover, click
   // is intercepted by LightboxController which fetches the standalone page
   // and injects it into the overlay body.
+  //
+  // Finsweet integration: tiles added to the DOM after boot (load-more,
+  // pagination, or Finsweet rebuilds on filter) are picked up automatically
+  // by a MutationObserver. Tiles are deduped via a WeakSet — a tile that
+  // gets reparented or re-emitted only ever has one set of listeners.
 
   class GridHoverController {
     constructor(options) {
@@ -1030,40 +1035,81 @@
         return;
       }
 
-      this.tiles = Array.from(document.querySelectorAll(this.opts.tileSelector));
-      if (this.tiles.length === 0) {
-        console.info('[RogueFilms] grid hover: no [data-rogue-grid-tile] elements found');
-        return;
-      }
-
       this.activeTile = null;
       this.activeVideo = null;
+      // WeakSet of tiles we've already bound — avoids double-binding when
+      // Finsweet load-more re-emits a tile, or when our MutationObserver
+      // sees a tile a second time after re-parenting.
+      this.bound = new WeakSet();
 
-      this.bindEvents();
+      this.bindAll();
+      this.observeDynamicTiles();
+      this.bindGlobalEvents();
 
       console.info(
-        '[RogueFilms] grid hover initialised — ' + this.tiles.length + ' tiles'
+        '[RogueFilms] grid hover initialised — ' +
+          document.querySelectorAll(this.opts.tileSelector).length +
+          ' tile(s) found at boot; new tiles will be picked up automatically'
       );
     }
 
-    bindEvents() {
-      this.tiles.forEach((tile) => {
-        const video = tile.querySelector(this.opts.videoSelector);
-        if (!video) return;
+    // Bind hover listeners on every currently-existing tile that we haven't
+    // already bound. Idempotent — safe to call repeatedly.
+    bindAll() {
+      const tiles = document.querySelectorAll(this.opts.tileSelector);
+      tiles.forEach((tile) => this.bindTile(tile));
+    }
 
-        // Defensive — Designer may forget one of these in the Webflow video
-        // element settings. Without them the browser will block autoplay or
-        // fall back to fullscreen on iOS.
-        video.muted = true;
-        video.loop = true;
-        video.playsInline = true;
-        video.setAttribute('playsinline', '');
-        video.setAttribute('webkit-playsinline', '');
+    bindTile(tile) {
+      if (this.bound.has(tile)) return;
+      // Skip tiles that live inside the lightbox overlay — fetched standalone
+      // content shouldn't trigger rollover behaviour.
+      const overlay = document.querySelector('[data-rogue-lightbox]');
+      if (overlay && overlay.contains(tile)) return;
 
-        tile.addEventListener('mouseenter', () => this.onHover(tile, video));
-        tile.addEventListener('mouseleave', () => this.onUnhover(tile, video));
+      const video = tile.querySelector(this.opts.videoSelector);
+      if (!video) return;
+
+      // Defensive — Designer may forget one of these in the Webflow video
+      // element settings. Without them the browser will block autoplay or
+      // fall back to fullscreen on iOS.
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+
+      tile.addEventListener('mouseenter', () => this.onHover(tile, video));
+      tile.addEventListener('mouseleave', () => this.onUnhover(tile, video));
+      this.bound.add(tile);
+    }
+
+    // Watch the page for tiles added after boot — this is how Finsweet
+    // Attributes 2's list-load (load-more / pagination) ships new items into
+    // the DOM. Without this, only the first batch of tiles would have
+    // rollover behaviour. Cheap subtree observer; the callback only acts on
+    // matching nodes.
+    observeDynamicTiles() {
+      if (typeof MutationObserver !== 'function') return;
+      const tileSel = this.opts.tileSelector;
+      this.observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          for (const node of m.addedNodes) {
+            if (node.nodeType !== 1) continue; // element nodes only
+            if (node.matches && node.matches(tileSel)) {
+              this.bindTile(node);
+            }
+            // The added node may be a wrapper containing tiles further down.
+            if (node.querySelectorAll) {
+              node.querySelectorAll(tileSel).forEach((t) => this.bindTile(t));
+            }
+          }
+        }
       });
+      this.observer.observe(document.body, { childList: true, subtree: true });
+    }
 
+    bindGlobalEvents() {
       // Pause active video when tab loses focus. Resume happens naturally on
       // the next mouseenter — we don't auto-resume on visibility return
       // because the user's pointer may no longer be over the tile.
