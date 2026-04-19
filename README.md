@@ -118,7 +118,33 @@ Skills under `/skills/` are how we codify repeating patterns for future Claude s
 
 Update this section regularly. It's the first thing anyone reads when picking the project up.
 
-**Current phase:** Phase 2 shipped. Phase 3 (lightbox + work-detail) starting.
+**Current phase:** Phase 3 in flight — standalone page wired, lightbox attributes wired, Music Videos grid rendering, one embed-URL fix away from end-to-end.
+
+## 🔜 Start here next session
+
+**Where we left off:** Music Videos page has 75 tiles rendering in the 2+3 alternating grid. Lightbox overlay is on the page with all `data-rogue-lightbox-*` attributes. 75 tiles are bound as triggers. Sitewide embed is currently loading controller v0.5.1, which can't resolve the tile's trigger URL — v0.5.2 (pushed + tagged) has the href-fallback fix that makes Dan's setup work as wired.
+
+**The single unblocker — change one character in the Webflow Site Footer script tag:**
+
+```html
+<!-- CURRENT (broken: resolves to v0.5.1, no href fallback) -->
+<script src="https://cdn.jsdelivr.net/gh/wearecrew/roguefilms-2.0@v0.5/code/video-controller.js" defer></script>
+
+<!-- SHOULD BE (no `v` prefix — semver range, picks latest v0.5.x) -->
+<script src="https://cdn.jsdelivr.net/gh/wearecrew/roguefilms-2.0@0.5/code/video-controller.js" defer></script>
+```
+
+Then republish, hard refresh [`/music-videos`](https://roguefilms-bef8a340cdee840701aac49d674b.webflow.io/music-videos), click any tile → lightbox should fetch `/director-showreels/[slug]` content and open.
+
+**If that works, next steps on the Music Videos page:**
+1. Run Playwright lightbox tests (open, prev/next, close, copy-link, esc) against `/music-videos` — write a new suite at `code/tests/music-videos.spec.js`.
+2. Wire conditional visibility on `.showreel_stills` + `.showreel_credits` (show only when CMS field is set) so empty blocks don't render.
+3. Confirm Back pill inside the lightbox closes the overlay (delegates to `data-rogue-showreel-back`).
+4. Check copy-link pill copies the canonical URL and flashes "Copied!".
+5. Check anamorphic videos render with correct aspect ratio via `data-video-width` / `data-video-height` on `.showreel_video-frame`.
+6. Convert the `.showreel_lightbox` element to a Webflow **Symbol / Component** so Homepage, Film & TV, Director pages can drop it in once without duplicating markup.
+
+**After Music Videos is green, Phase 5 Film & TV** is essentially a clone of Music Videos — same grid, same lightbox wiring, different CMS filter (`work-type = Film and TV`). Should take <30min once Music Videos is validated.
 
 **Phase 1 deliverables (2026-04-18):**
 - Design system spec at [docs/design-system.md](docs/design-system.md) — two-tier (primitive + semantic) naming, consistent scale, responsive-patterns section.
@@ -138,27 +164,35 @@ Update this section regularly. It's the first thing anyone reads when picking th
 - Vimeo plan confirmed (Pro, HLS available).
 - Full Figma extraction: all 7 desktop frames (1728px canvas) + all 7 mobile frames (402px canvas).
 
-**In flight (Phase 1, attempt 2):**
-1. Clean-slate: Webflow Tokens collection empty. Previous spec/tokens.json deleted.
-2. Research: industry token naming conventions (Material / Polaris / Atlassian three-tier model), and any relevant skills in this Code environment.
-3. New spec at `docs/design-system.md` with primitive → semantic naming, three-mode responsive tokens (no clamp()).
-4. Test import: `docs/tokens-test.json` with 3 tokens — validate Crew Token Bridge parses the format before emitting the full spec.
-5. Full `docs/tokens.json`. Dan imports via plugin.
-6. Webflow populated via MCP: three modes on the collection, discrete per-mode values, `existing_variable_id` references for semantics.
-
 **Phase 2 shipped:**
 - [`code/video-controller.js`](code/video-controller.js) — sitewide module served via jsDelivr `@0.4`. Injects motion-easing CSS vars, active-state CSS, exposes `window.RogueFilms.initTalentPage()`.
 - Background-swap controller: crossfade with canplay-gated fade-in, poster layer, auto-rotate, filters, reduced-motion, tab-visibility, race-safe rapid hover.
 - Talent page live on [`/talent`](https://roguefilms-bef8a340cdee840701aac49d674b.webflow.io/talent) with 24 directors, 4 rebels, filter pills, Webflow CMS bindings.
 - Build guide ([`docs/phase-2-talent-build.md`](docs/phase-2-talent-build.md)) + Playwright suite ([`code/tests/talent.spec.js`](code/tests/talent.spec.js)).
 
-**Phase 3 kicking off now:** lightbox + work-detail page. Scope:
-- Rebuild the standalone `/director-showreels/[slug]` template in v2 styling.
-- Build a lightbox component triggered from any grid tile (any page). Uses Finsweet Smart Lightbox where it fits.
-- Controller gains a `lightbox` mode (full-quality video, audio, full-length file).
-- Next/previous navigation within the current list context.
-- Copy-link button (Finsweet copy-to-clipboard) copies the deep link to the standalone page.
-- Playwright suite for open, next/prev, escape-close, copy-link, anamorphic ratio.
+**Phase 3 in flight — progress so far:**
+
+**Architecture decision (decisions.md has the detail)**: **fetch-and-inject** lightbox, not Finsweet Smart Lightbox. Standalone page at `/director-showreels/[slug]` is the canonical source; lightbox overlay is a sitewide shell; controller fetches the standalone HTML, extracts `[data-rogue-showreel-content]`, injects into `[data-rogue-lightbox-body]`.
+
+**Shipped this session:**
+- Controller v0.5.2 with `initLightbox()` — fetch-and-inject, prev/next, copy-link, esc/backdrop close, scroll lock, focus trap, cached fetches, race-safe rapid hover. `href`-fallback for the trigger URL so designers can just bind the Webflow Link Block to the collection page + add a presence-only attribute.
+- CMS `credits` RichText field added to Showreels collection.
+- Static HTML mockup at [`code/mockup/work-detail.html`](code/mockup/work-detail.html) — visually accurate reference.
+- Reference build page "Film detail v2 reference" created via MCP with all classes + data-attributes.
+- [`docs/phase-3-lightbox-build.md`](docs/phase-3-lightbox-build.md) — full attribute contract + step-by-step Designer instructions.
+- Standalone `/director-showreels/[slug]` template rebuilt in v2 styling with CMS bindings. Live on staging (example: [`/director-showreels/welcome-to-my-bank-2`](https://roguefilms-bef8a340cdee840701aac49d674b.webflow.io/director-showreels/welcome-to-my-bank-2)).
+- Sitewide `.showreel_lightbox` overlay wrapper placed on both the reference page and `/music-videos`, with `data-rogue-lightbox*` attributes, close button, inner `.showreel_layout` body.
+- Music Videos page created with Collection List filtered to `work-type = Music Video`. 2+3 alternating grid CSS applied. 75 tiles rendering.
+- Controller auto-inits on any page where a `[data-rogue-lightbox]` is present — no per-page init script needed for the lightbox.
+
+**Tagged releases**: v0.5.0, v0.5.1, v0.5.2. jsDelivr `@0.5` semver range points to latest v0.5.x.
+
+**Remaining loose ends:**
+- Site Footer embed uses `@v0.5` — should be `@0.5` (see "Start here next session" above).
+- Lightbox overlay is not yet a Webflow Symbol / Component — currently duplicated on each page where it's needed.
+- Prev/next on the STANDALONE page are inert (deferred to Phase 6 for director-archive navigation).
+- No Playwright tests for Music Videos / lightbox yet.
+- Filter dropdown (director) + search input on Music Videos not yet built (Finsweet list-filter — optional polish).
 
 **Resolved (Phase 0 walkthrough):**
 - Vimeo plan: Pro. HLS streams are available on Pro accounts via the Player API. We can use HLS for the talent page background video and grid hover loops. Direct progressive MP4 also available as fallback.

@@ -4,6 +4,30 @@ Running record of architectural and project decisions, with rationale. Append ne
 
 ---
 
+## 2026-04-19 · Phase 3 in flight — lightbox + work-detail architecture
+
+**Decision.** Fetch-and-inject lightbox pattern (not Finsweet Smart Lightbox, not a custom crewjs-modal clone). Standalone `/director-showreels/[slug]` template page is the canonical source. A sitewide `.showreel_lightbox` overlay (with `data-rogue-lightbox*` attributes) sits hidden on every grid page. On tile click, the controller fetches the standalone HTML, extracts `[data-rogue-showreel-content]`, replaces `[data-rogue-lightbox-body]` innerHTML, opens the overlay. In-memory cache per URL.
+
+**Why.**
+- v1's crewjs-modal is custom and old; not worth inheriting.
+- Smart Lightbox is image-focused; video + rich credits + stills are awkward.
+- Fetch-and-inject gives a single source of truth (the standalone template), no duplicated CMS rendering on list pages, and the click UX opens instantly after first-fetch cache.
+- Cost: ~50-200ms round-trip on first open per URL; acceptable and cacheable.
+
+**Triggers.** Any element matching `[data-rogue-showreel-url], [data-rogue-showreel-trigger]` on any page. URL resolved via `data-rogue-showreel-url` (if URL-shaped) or the element's `href` (fallback). That means in Webflow, designers just bind the Link Block to the collection page and add a presence-only `data-rogue-showreel-trigger` attribute — no CMS-composed attribute value needed (which Webflow's custom attr UI can't produce anyway).
+
+**Versioning lesson.** jsDelivr's `@0.5` (semver range, no `v` prefix) picks the latest matching tag. `@v0.5` is ambiguous and didn't resolve to the latest v0.5.x for us. Sitewide embed should use `@<major>.<minor>` form. Update the Site Footer script tag when promoting across minor-version boundaries (e.g. `@0.5` → `@0.6` when Phase 6 or 7 ships breaking changes).
+
+**Status at session close.**
+- Controller versions: v0.5.0 → v0.5.2 tagged on `@0.5`.
+- CMS: `credits` RichText field added to Showreels.
+- Standalone template rebuilt in v2 styling with CMS bindings.
+- Music Videos page live at `/music-videos` with 75 tiles, 2+3 alternating grid, triggers + lightbox attrs all present.
+- One remaining block: Site Footer embed uses `@v0.5` (resolves to 0.5.1 → missing href fallback). One-char edit to `@0.5` unblocks. Documented at top of README.
+- Pending: make `.showreel_lightbox` a Webflow Symbol so Homepage / Film & TV / Director pages can reuse without duplication. Playwright suite for lightbox. Finsweet list-filter (director dropdown + search) on Music Videos is optional polish.
+
+---
+
 ## 2026-04-18 · Phase 2 shipped — Talent page live with background-swap controller
 
 **Outcome.** [`/talent`](https://roguefilms-bef8a340cdee840701aac49d674b.webflow.io/talent) is live on the Webflow.io staging subdomain. Controller v0.4.3 served via jsDelivr `@0.4`. 24 directors + 4 rebels detected; filter pills (All / Rogue / Rebel) work; hover swaps to hovered director's video; auto-rotate runs with name highlight; 40% dim overlay; reduced-motion support; canplay-gated fade; poster fallback.
