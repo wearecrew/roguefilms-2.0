@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.5.0-phase3';
+  const VERSION = '0.5.1-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -637,8 +637,13 @@
         }
       });
 
-      // Delegate Back pill + Copy-link clicks inside the lightbox body
-      // (content is fetched + injected, so listeners need to be delegated).
+      // Delegate Back pill + Copy-link + inline prev/next clicks inside the
+      // lightbox body. Content is fetched + injected, so listeners need to
+      // be delegated. The inline prev/next buttons (data-rogue-showreel-prev
+      // / data-rogue-showreel-next) are the same ones that live in the
+      // showreel content on the standalone page. Inside the overlay they
+      // share the controller's prev/next logic; outside the overlay they're
+      // inert unless Phase 6 wires them up for director-archive navigation.
       this.overlay.addEventListener('click', (e) => {
         const backBtn = e.target.closest('[data-rogue-showreel-back]');
         if (backBtn) {
@@ -650,6 +655,19 @@
         if (copyBtn) {
           e.preventDefault();
           this.copyShareLink(copyBtn);
+          return;
+        }
+        const prevBtn = e.target.closest('[data-rogue-showreel-prev]');
+        if (prevBtn) {
+          e.preventDefault();
+          this.prev();
+          return;
+        }
+        const nextBtn = e.target.closest('[data-rogue-showreel-next]');
+        if (nextBtn) {
+          e.preventDefault();
+          this.next();
+          return;
         }
       });
     }

@@ -50,8 +50,8 @@ Tiles can live on any page. The controller uses a global click delegate to catch
 |---|---|---|
 | `data-rogue-showreel-content` | The outer wrapper of the showreel layout | Controller fetches the standalone page and extracts the innerHTML of this element |
 | `data-rogue-showreel-back` | Back pill (`<a>` or `<button>`) | In the lightbox, click closes the overlay. On the standalone page, `href="javascript:history.back()"` works as-is. |
-| `data-rogue-showreel-prev` | Prev arrow button (desktop) | Optional; reserved for standalone-page archive navigation (Phase 6). Currently no-op. |
-| `data-rogue-showreel-next` | Next arrow button (desktop) | Optional; same as above |
+| `data-rogue-showreel-prev` | Prev arrow button (desktop) | **Inside lightbox**: delegates to lightbox prev() — same as clicking the overlay's own prev button. **On standalone page**: no-op until Phase 6 (director-archive navigation). |
+| `data-rogue-showreel-next` | Next arrow button (desktop) | Same as prev — delegates inside lightbox, no-op on standalone. |
 | `data-rogue-showreel-frame` | Video frame container | Controller reads `data-video-width` / `data-video-height` and sets `aspect-ratio` |
 | `data-video-width` | Same element | CMS bind to `video-width` (Number field on Showreels); fallback 16 |
 | `data-video-height` | Same element | CMS bind to `video-height`; fallback 9 |
@@ -173,3 +173,4 @@ Defaults in brackets; flag if you disagree.
 ## Change log
 
 - **2026-04-19**: initial build guide for Phase 3. Static mockup at `code/mockup/work-detail.html`. Controller v0.5.0 adds `initLightbox()` + auto-init. CMS `credits` RichText field added to the Director showreels collection.
+- **2026-04-19 (v0.5.1)**: controller now delegates inline `data-rogue-showreel-prev/next` clicks inside the overlay to the lightbox's prev()/next() — the showreel content's own prev/next arrows function identically to the overlay's own buttons when content is injected. On the standalone page they remain no-op until Phase 6 director-archive navigation ships.
