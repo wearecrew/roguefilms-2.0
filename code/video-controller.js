@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.5.2-phase3';
+  const VERSION = '0.5.3-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -87,6 +87,19 @@
       '  background: transparent;',  // chrome handled by overlay bg
       '}',
       'body.rogue-lightbox-open { overflow: hidden; }',
+      '',
+      '/* Hide lightbox chrome when not inside a lightbox overlay.',
+      '   Chrome lives inside [data-rogue-showreel-content] on the standalone',
+      '   page so it can inherit layout. The standalone page should not show it.',
+      '   When that content is fetched and injected into the lightbox body, the',
+      '   :is() override re-shows it because the chrome then has a',
+      '   [data-rogue-lightbox] ancestor. */',
+      '[data-rogue-lightbox-close],',
+      '[data-rogue-lightbox-prev],',
+      '[data-rogue-lightbox-next] { display: none; }',
+      '[data-rogue-lightbox] [data-rogue-lightbox-close],',
+      '[data-rogue-lightbox] [data-rogue-lightbox-prev],',
+      '[data-rogue-lightbox] [data-rogue-lightbox-next] { display: revert; }',
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -627,10 +640,10 @@
         false
       );
 
-      if (this.closeBtn) this.closeBtn.addEventListener('click', () => this.close());
-      if (this.backdrop) this.backdrop.addEventListener('click', () => this.close());
-      if (this.prevBtn) this.prevBtn.addEventListener('click', () => this.prev());
-      if (this.nextBtn) this.nextBtn.addEventListener('click', () => this.next());
+      // Chrome clicks (close/prev/next/backdrop) are handled by the delegated
+      // overlay listener below — that path works for both overlay-root chrome
+      // and chrome that gets injected with the body content. Direct listeners
+      // here would double-fire alongside delegation.
 
       // Esc to close; Tab trap when open.
       document.addEventListener('keydown', (e) => {
@@ -643,16 +656,32 @@
         }
       });
 
-      // Delegate Back pill + Copy-link + inline prev/next clicks inside the
-      // lightbox body. Content is fetched + injected, so listeners need to
-      // be delegated. The inline prev/next buttons (data-rogue-showreel-prev
-      // / data-rogue-showreel-next) are the same ones that live in the
-      // showreel content on the standalone page. Inside the overlay they
-      // share the controller's prev/next logic; outside the overlay they're
-      // inert unless Phase 6 wires them up for director-archive navigation.
+      // Delegate chrome + inline action clicks inside the overlay. Content is
+      // fetched and injected on each open, so any chrome that lives inside
+      // [data-rogue-showreel-content] on the standalone page can't be wired
+      // with cached listeners — delegation handles both overlay-root chrome
+      // and post-injection chrome with the same code.
+      //
+      // Two attribute families are supported:
+      //   data-rogue-lightbox-* — overlay chrome (close, prev, next, backdrop).
+      //     Works whether the element lives at the overlay root or inside the
+      //     injected body.
+      //   data-rogue-showreel-* — inline content actions (back, copy-link, and
+      //     standalone prev/next deferred to Phase 6). Only delegated inside
+      //     the overlay; on the standalone page they're inert.
       this.overlay.addEventListener('click', (e) => {
-        const backBtn = e.target.closest('[data-rogue-showreel-back]');
-        if (backBtn) {
+        // Backdrop / overlay-bg click — close. Match either an explicit
+        // backdrop element or a click on the overlay surface itself (so the
+        // overlay doubles as backdrop when no dedicated element exists).
+        if (
+          e.target.closest('[data-rogue-lightbox-backdrop]') ||
+          e.target === this.overlay
+        ) {
+          this.close();
+          return;
+        }
+        const closeBtn = e.target.closest('[data-rogue-lightbox-close], [data-rogue-showreel-back]');
+        if (closeBtn) {
           e.preventDefault();
           this.close();
           return;
@@ -663,13 +692,13 @@
           this.copyShareLink(copyBtn);
           return;
         }
-        const prevBtn = e.target.closest('[data-rogue-showreel-prev]');
+        const prevBtn = e.target.closest('[data-rogue-lightbox-prev], [data-rogue-showreel-prev]');
         if (prevBtn) {
           e.preventDefault();
           this.prev();
           return;
         }
-        const nextBtn = e.target.closest('[data-rogue-showreel-next]');
+        const nextBtn = e.target.closest('[data-rogue-lightbox-next], [data-rogue-showreel-next]');
         if (nextBtn) {
           e.preventDefault();
           this.next();
@@ -698,6 +727,13 @@
         this.body.innerHTML = html;
         this.applyVideoAspectRatios(this.body);
         this.autoplayVideoIfPresent(this.body);
+        // Move focus into the freshly-injected chrome for keyboard users.
+        // The close button is the natural landing target. If the chrome lives
+        // at the overlay root instead, that selector still matches.
+        const closeBtn = this.overlay.querySelector(
+          '[data-rogue-lightbox-close], [data-rogue-showreel-back]'
+        );
+        if (closeBtn && document.activeElement !== closeBtn) closeBtn.focus();
       } catch (err) {
         console.error('[RogueFilms] lightbox fetch failed', err);
         this.body.innerHTML = this.renderErrorHtml(url);
