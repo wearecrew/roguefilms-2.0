@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.5.1-phase3';
+  const VERSION = '0.5.2-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -562,7 +562,13 @@
     constructor(options) {
       this.opts = Object.assign(
         {
-          triggerSelector: '[data-rogue-showreel-url]',
+          // Any element matching this selector is a lightbox trigger. The URL
+          // is resolved by resolveTriggerUrl() — it prefers an explicit URL in
+          // data-rogue-showreel-url, else falls back to the element's own
+          // href (or a descendant <a>'s href). That lets designers just bind
+          // the Link Block to the collection page in Webflow without needing
+          // a CMS-composed attribute value.
+          triggerSelector: '[data-rogue-showreel-url], [data-rogue-showreel-trigger]',
           fetchTimeoutMs: 8000,
         },
         options || {}
@@ -613,7 +619,7 @@
           if (!trigger) return;
           // Allow middle-click / cmd-click / ctrl-click to open in new tab.
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
-          const url = trigger.dataset.rogueShowreelUrl;
+          const url = this.resolveTriggerUrl(trigger);
           if (!url) return;
           e.preventDefault();
           this.open(url);
@@ -679,7 +685,7 @@
       const triggers = this.getTriggers();
       this.state.currentUrl = url;
       this.state.currentIndex = triggers.findIndex(
-        (t) => t.dataset.rogueShowreelUrl === url
+        (t) => this.resolveTriggerUrl(t) === url
       );
 
       this.setOpen(true);
@@ -745,18 +751,36 @@
       );
     }
 
+    // Resolve the canonical URL for a trigger element. Prefers an explicit
+    // data-rogue-showreel-url (only if it looks like a URL path), otherwise
+    // falls back to the element's href (if it's an <a>) or a descendant
+    // <a>'s href. Supports the common Webflow pattern where the Link Block
+    // is bound to a collection page and the designer just adds a presence-
+    // only data-rogue-showreel-trigger attribute.
+    resolveTriggerUrl(el) {
+      if (!el) return null;
+      const direct = el.dataset.rogueShowreelUrl;
+      if (direct && /^(https?:\/\/|\/)/.test(direct)) return direct;
+      const anchor = el.tagName === 'A' ? el : el.querySelector('a[href]');
+      if (anchor) {
+        const href = anchor.getAttribute('href');
+        if (href && href !== '#') return href;
+      }
+      return null;
+    }
+
     prev() {
       const triggers = this.getTriggers();
       if (triggers.length < 2) return;
       const next = (this.state.currentIndex - 1 + triggers.length) % triggers.length;
-      this.open(triggers[next].dataset.rogueShowreelUrl);
+      this.open(this.resolveTriggerUrl(triggers[next]));
     }
 
     next() {
       const triggers = this.getTriggers();
       if (triggers.length < 2) return;
       const next = (this.state.currentIndex + 1) % triggers.length;
-      this.open(triggers[next].dataset.rogueShowreelUrl);
+      this.open(this.resolveTriggerUrl(triggers[next]));
     }
 
     // ─── Fetch + inject ────────────────────────────────────────────────────
