@@ -9,8 +9,11 @@
  * Responsibilities (by phase of the v2 build):
  *   1. Inject design-system runtime CSS (motion easings, durations) as :root vars.
  *   2. Expose `window.RogueFilms` namespace for per-page init scripts.
- *   3. Provide controllers for specific page patterns. Phase 2: Talent (background swap).
- *      Phase 3/4/6 will add: lightbox mode, grid hover mode.
+ *   3. Provide controllers for specific page patterns:
+ *        Phase 2: Talent (background swap).
+ *        Phase 3: Lightbox (fetch + inject standalone showreel pages),
+ *                 GridHover (per-tile rollover videos on Music Videos /
+ *                 Film & TV / similar grid views).
  *
  * Per-page usage (Webflow page custom code → Footer):
  *
@@ -26,7 +29,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.5.3-phase3';
+  const VERSION = '0.6.0-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -100,6 +103,21 @@
       '[data-rogue-lightbox] [data-rogue-lightbox-close],',
       '[data-rogue-lightbox] [data-rogue-lightbox-prev],',
       '[data-rogue-lightbox] [data-rogue-lightbox-next] { display: revert; }',
+      '',
+      '/* Grid rollover videos (Phase 3) — fade in over the static poster',
+      '   while the tile is hovered. The .is-rolling class is applied by',
+      '   GridHoverController on mouseenter and removed on mouseleave (or',
+      '   when another tile takes over as the active rollover). The video',
+      '   element should be positioned over its poster in Webflow; this rule',
+      '   only handles the opacity + fade timing. */',
+      '[data-rogue-grid-tile] [data-rogue-grid-rollover] {',
+      '  opacity: 0;',
+      '  transition: opacity 250ms var(--motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1));',
+      '  pointer-events: none;',
+      '}',
+      '[data-rogue-grid-tile].is-rolling [data-rogue-grid-rollover] {',
+      '  opacity: 1;',
+      '}',
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -118,6 +136,15 @@
 
   const isTouchDevice = () =>
     'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0;
+
+  // Hover capability — true when the primary input device can hover (mouse,
+  // trackpad). Returns false on touch-only devices and when the user has no
+  // hover-capable input attached. Preferred over isTouchDevice() for deciding
+  // whether to enable hover-driven UI like grid rollover videos: hybrid
+  // devices with both touch + mouse still report (hover: hover) so they get
+  // the rollover, whereas pure touch screens do not.
+  const supportsHover = () =>
+    !!(window.matchMedia && window.matchMedia('(hover: hover)').matches);
 
   // ─── Talent page controller: background swap ─────────────────────────────
   //
@@ -938,6 +965,165 @@
     }
   }
 
+  // ─── Grid hover controller (Phase 3) ──────────────────────────────────────
+  //
+  // Plays a short low-bitrate "rollover" video on each grid tile when hovered
+  // on desktop. Used on Music Videos, Film & TV, and any grid view backed by
+  // the Showreels collection. Does not initialise on touch-only devices, so
+  // mobile visitors never download rollover bytes — battery and bandwidth
+  // budget per the v2 brief's mobile-first principle.
+  //
+  // DOM contract (per tile, on the page):
+  //
+  //   <a data-rogue-grid-tile
+  //      data-rogue-showreel-trigger
+  //      href="/director-showreels/the-slug">
+  //     <img class="tile_poster" src="…poster.jpg" />
+  //     <video data-rogue-grid-rollover
+  //            preload="none" muted loop playsinline
+  //            src="…rollover.mp4">
+  //     </video>
+  //     ...tile chrome...
+  //   </a>
+  //
+  // The video element should have its src bound by Webflow to the Showreel's
+  // video-url field. preload="none" is critical — it keeps the video off the
+  // wire until the user actually hovers. The controller defensively re-applies
+  // muted/loop/playsinline at init in case the Designer didn't set them.
+  //
+  // Behaviours:
+  //   - mouseenter on a tile → pause any other playing rollover, play this one
+  //   - mouseleave → pause
+  //   - .is-rolling class added/removed on the tile to drive the opacity
+  //     crossfade between poster and video (CSS injected by injectRuntimeCSS)
+  //   - Tab visibility hidden → pause active video; user can mouseenter again
+  //     to resume
+  //   - Single-active concurrency: only one rollover plays at a time across
+  //     the whole page
+  //   - Touch devices and prefers-reduced-motion → controller no-ops, no
+  //     bytes downloaded, static poster remains visible
+  //
+  // Lightbox interaction: tiles also typically carry data-rogue-showreel-
+  // trigger so the same element opens the lightbox on click. The hover and
+  // click pathways are independent — hover plays/pauses the rollover, click
+  // is intercepted by LightboxController which fetches the standalone page
+  // and injects it into the overlay body.
+
+  class GridHoverController {
+    constructor(options) {
+      this.opts = Object.assign(
+        {
+          tileSelector: '[data-rogue-grid-tile]',
+          videoSelector: '[data-rogue-grid-rollover]',
+        },
+        options || {}
+      );
+
+      if (!supportsHover()) {
+        console.info(
+          '[RogueFilms] grid hover skipped — device has no hover-capable pointer (touch-only)'
+        );
+        return;
+      }
+      if (prefersReducedMotion()) {
+        console.info('[RogueFilms] grid hover skipped — prefers-reduced-motion is set');
+        return;
+      }
+
+      this.tiles = Array.from(document.querySelectorAll(this.opts.tileSelector));
+      if (this.tiles.length === 0) {
+        console.info('[RogueFilms] grid hover: no [data-rogue-grid-tile] elements found');
+        return;
+      }
+
+      this.activeTile = null;
+      this.activeVideo = null;
+
+      this.bindEvents();
+
+      console.info(
+        '[RogueFilms] grid hover initialised — ' + this.tiles.length + ' tiles'
+      );
+    }
+
+    bindEvents() {
+      this.tiles.forEach((tile) => {
+        const video = tile.querySelector(this.opts.videoSelector);
+        if (!video) return;
+
+        // Defensive — Designer may forget one of these in the Webflow video
+        // element settings. Without them the browser will block autoplay or
+        // fall back to fullscreen on iOS.
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+
+        tile.addEventListener('mouseenter', () => this.onHover(tile, video));
+        tile.addEventListener('mouseleave', () => this.onUnhover(tile, video));
+      });
+
+      // Pause active video when tab loses focus. Resume happens naturally on
+      // the next mouseenter — we don't auto-resume on visibility return
+      // because the user's pointer may no longer be over the tile.
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && this.activeVideo) {
+          this.pauseActive();
+        }
+      });
+    }
+
+    onHover(tile, video) {
+      // Single-active concurrency: pause the previous rollover before starting
+      // this one. Keeps load on the page low and matches the visual model —
+      // the user only sees one playing tile at a time.
+      if (this.activeVideo && this.activeVideo !== video) {
+        this.pauseActive();
+      }
+      this.activeTile = tile;
+      this.activeVideo = video;
+      tile.classList.add('is-rolling');
+
+      const p = video.play();
+      if (p && typeof p.catch === 'function') {
+        // Rejection happens for two reasons: autoplay policy (rare here since
+        // the video is muted) and play() interruption when a rapid hover
+        // pauses this video before it finished starting. Both are safe to
+        // swallow — the user has already moved on.
+        p.catch(() => {});
+      }
+    }
+
+    onUnhover(tile, video) {
+      // Only clear active state if THIS tile is still the active one. Rapid
+      // hovers can fire mouseleave on tile A after mouseenter on tile B
+      // already swapped active to B — don't blow that away.
+      if (this.activeVideo === video) {
+        this.activeTile = null;
+        this.activeVideo = null;
+      }
+      tile.classList.remove('is-rolling');
+      try {
+        video.pause();
+      } catch (_) {
+        /* noop */
+      }
+    }
+
+    pauseActive() {
+      if (!this.activeVideo) return;
+      try {
+        this.activeVideo.pause();
+      } catch (_) {
+        /* noop */
+      }
+      if (this.activeTile) this.activeTile.classList.remove('is-rolling');
+      this.activeTile = null;
+      this.activeVideo = null;
+    }
+  }
+
   // ─── Namespace + boot ────────────────────────────────────────────────────
 
   const RogueFilms = {
@@ -956,6 +1142,13 @@
       RogueFilms._controllers.lightbox = controller;
       return controller;
     },
+
+    initGridHover(options) {
+      if (RogueFilms._controllers.gridHover) return RogueFilms._controllers.gridHover;
+      const controller = new GridHoverController(options);
+      RogueFilms._controllers.gridHover = controller;
+      return controller;
+    },
   };
 
   // Auto-init the lightbox if an overlay exists on the page. Safe on pages
@@ -966,9 +1159,18 @@
     }
   }
 
+  // Auto-init grid hover if any tile is marked. Controller no-ops on touch
+  // devices and reduced-motion preference, so this is safe to wire site-wide.
+  function autoInitGridHover() {
+    if (document.querySelector('[data-rogue-grid-tile]')) {
+      RogueFilms.initGridHover();
+    }
+  }
+
   function boot() {
     injectRuntimeCSS();
     autoInitLightbox();
+    autoInitGridHover();
   }
 
   if (document.readyState === 'loading') {
