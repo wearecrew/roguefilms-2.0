@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.7.0-phase3';
+  const VERSION = '0.7.1-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -1254,6 +1254,17 @@
         // with CMS binding mounts after the script runs).
       }
 
+      // Monotonically growing set of values we've ever seen per field. The
+      // "present" universe for the purposes of pruning is the union of every
+      // observation since init, not the momentary list state. Without this,
+      // when Finsweet's filter removes non-matching items from the DOM
+      // (which v2 does for fs-list-load="infinite" mode), a subsequent
+      // prune would see only the filtered-in director and hide every other
+      // option in the dropdown — which produces a degenerate UX where
+      // selecting a director empties the dropdown of all other options and
+      // the user can't switch to a different director without resetting.
+      this.seenValues = new Map();
+
       this.pendingRaf = 0;
       this.scheduleUpdate();
       this.observe();
@@ -1307,14 +1318,23 @@
       this.refreshFilterInputs();
 
       this.fieldsToPrune.forEach((field) => {
-        const present = this.collectFieldValues(field);
+        // Union newly-observed values into the seen set for this field.
+        // Seen values are never removed — see constructor comment for why.
+        const currentlyPresent = this.collectFieldValues(field);
+        let seen = this.seenValues.get(field);
+        if (!seen) {
+          seen = new Set();
+          this.seenValues.set(field, seen);
+        }
+        currentlyPresent.forEach((v) => seen.add(v));
+
         this.filterInputs
           .filter((el) => el.getAttribute('fs-list-field') === field)
           .forEach((input) => {
             const value = input.getAttribute('fs-list-value');
             const wrapper = this.findWrapper(input);
             if (!wrapper) return;
-            const shouldShow = present.has(value);
+            const shouldShow = seen.has(value);
             // Use a data attribute as the authoritative "we hid this" marker
             // so we can undo it cleanly and avoid fighting with Webflow's
             // w-condition-invisible or any other visibility controllers.
