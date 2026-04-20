@@ -13,7 +13,9 @@
  *        Phase 2: Talent (background swap).
  *        Phase 3: Lightbox (fetch + inject standalone showreel pages),
  *                 GridHover (per-tile rollover videos on Music Videos /
- *                 Film & TV / similar grid views).
+ *                 Film & TV / similar grid views),
+ *                 FilterPrune (hides Finsweet filter options whose value
+ *                 isn't present in the current page's list).
  *
  * Per-page usage (Webflow page custom code → Footer):
  *
@@ -29,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.6.1-phase3';
+  const VERSION = '0.7.0-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -1170,6 +1172,197 @@
     }
   }
 
+  // ─── Filter prune controller (Phase 3) ────────────────────────────────────
+  //
+  // Generic pruning for Finsweet Attributes 2 filter options. When a filter
+  // dropdown on a category page (Music Videos, Film & TV, etc.) is fed by a
+  // separate CMS Collection List — e.g. a Directors roster feeding a
+  // "filter by director" dropdown — the dropdown will contain options for
+  // records that have no matching items in the current page's list. Example:
+  // the Directors roster has 28 directors but only 15 of them have made a
+  // music video, so the dropdown on /music-videos is padded with 13 options
+  // that filter to zero results.
+  //
+  // This controller hides those dead options automatically. It scans the
+  // list items' `fs-list-field` cells for unique values, then toggles the
+  // display of any filter input whose `fs-list-value` isn't in that set.
+  // Generic across field names — works the same for director, producer,
+  // long-form/short-form, and any future filter category without code
+  // changes. Same logic on Music Videos, Film & TV, director archive pages.
+  //
+  // DOM contract:
+  //
+  //   <div fs-list-element="list"> … items … </div>      ← the filtered list
+  //     <div class="w-dyn-item">
+  //       <a fs-list-field="director">Sam Brown</a>      ← source of truth
+  //     </div>
+  //
+  //   <form>                                             ← separate location
+  //     <label class="w-dyn-item">                       ← wrapper that hides
+  //       <input fs-list-field="director"                ← filter declares
+  //              fs-list-value="Sam Brown" />            ← which value
+  //     </label>
+  //   </form>
+  //
+  // The wrapper that gets display:none'd is the closest .w-dyn-item (the
+  // Collection Item boundary) or, failing that, the closest label/parent —
+  // so the whole row disappears, not just the input.
+  //
+  // Re-prunes when the list DOM changes (Finsweet load-more, pagination,
+  // or any dynamic item addition). Debounced via rAF so a burst of item
+  // insertions only triggers one recompute.
+  //
+  // Notes:
+  //   - Pruning only looks at textContent of list items' fs-list-field cells.
+  //     Finsweet's own filter state (display:none items) doesn't change that
+  //     — the full universe of list items is always considered, so an active
+  //     director filter doesn't falsely shrink the dropdown.
+  //   - Filter inputs INSIDE the list container are ignored (those are item
+  //     data cells, not filter controls).
+  //   - Whitespace-only textContent is ignored — avoids matching placeholder
+  //     or empty cells.
+
+  class FilterPruneController {
+    constructor(options) {
+      this.opts = Object.assign(
+        {
+          listSelector: '[fs-list-element="list"]',
+          // Filter inputs to prune — anything with both fs-list-field and
+          // fs-list-value declared (the Finsweet pattern for radios /
+          // checkboxes / selects).
+          filterSelector: '[fs-list-field][fs-list-value]',
+          // Element to hide when the option is pruned. First match wins;
+          // .w-dyn-item covers the Webflow CMS case, label covers static
+          // lists, parentElement is the last resort.
+          wrapperSelectors: ['.w-dyn-item', 'label', '[data-rogue-filter-option]'],
+        },
+        options || {}
+      );
+
+      this.list = document.querySelector(this.opts.listSelector);
+      if (!this.list) {
+        console.info('[RogueFilms] filter prune: no [fs-list-element="list"] on page');
+        return;
+      }
+
+      this.refreshFilterInputs();
+      if (this.filterInputs.length === 0) {
+        console.info(
+          '[RogueFilms] filter prune: no filter inputs with fs-list-value on page'
+        );
+        // Still observe — filter inputs may render late (e.g. Collection List
+        // with CMS binding mounts after the script runs).
+      }
+
+      this.pendingRaf = 0;
+      this.scheduleUpdate();
+      this.observe();
+
+      console.info(
+        '[RogueFilms] filter prune initialised — ' +
+          this.filterInputs.length +
+          ' filter input(s) across ' +
+          this.fieldsToPrune.size +
+          ' field(s)'
+      );
+    }
+
+    refreshFilterInputs() {
+      // Only consider inputs that live OUTSIDE the list — inputs inside the
+      // list are item data cells, not filter controls.
+      this.filterInputs = Array.from(
+        document.querySelectorAll(this.opts.filterSelector)
+      ).filter((el) => !this.list.contains(el));
+      this.fieldsToPrune = new Set(
+        this.filterInputs.map((el) => el.getAttribute('fs-list-field'))
+      );
+    }
+
+    // Collect the unique textContent values for a given fs-list-field within
+    // the list. Reads all items regardless of Finsweet filter state — the
+    // goal is to know what values COULD match, not what's currently shown.
+    collectFieldValues(field) {
+      const cells = this.list.querySelectorAll(
+        '[fs-list-field="' + field + '"]'
+      );
+      const values = new Set();
+      cells.forEach((cell) => {
+        const text = (cell.textContent || '').trim();
+        if (text) values.add(text);
+      });
+      return values;
+    }
+
+    findWrapper(input) {
+      for (const sel of this.opts.wrapperSelectors) {
+        const match = input.closest(sel);
+        if (match) return match;
+      }
+      return input.parentElement || input;
+    }
+
+    prune() {
+      // Re-collect inputs in case the filter's own Collection List rendered
+      // more options since init.
+      this.refreshFilterInputs();
+
+      this.fieldsToPrune.forEach((field) => {
+        const present = this.collectFieldValues(field);
+        this.filterInputs
+          .filter((el) => el.getAttribute('fs-list-field') === field)
+          .forEach((input) => {
+            const value = input.getAttribute('fs-list-value');
+            const wrapper = this.findWrapper(input);
+            if (!wrapper) return;
+            const shouldShow = present.has(value);
+            // Use a data attribute as the authoritative "we hid this" marker
+            // so we can undo it cleanly and avoid fighting with Webflow's
+            // w-condition-invisible or any other visibility controllers.
+            if (shouldShow) {
+              if (wrapper.dataset.rogueFilterPruned === 'true') {
+                wrapper.style.display = '';
+                delete wrapper.dataset.rogueFilterPruned;
+              }
+            } else if (wrapper.dataset.rogueFilterPruned !== 'true') {
+              wrapper.style.display = 'none';
+              wrapper.dataset.rogueFilterPruned = 'true';
+            }
+          });
+      });
+    }
+
+    scheduleUpdate() {
+      if (this.pendingRaf) return;
+      this.pendingRaf = requestAnimationFrame(() => {
+        this.pendingRaf = 0;
+        this.prune();
+      });
+    }
+
+    observe() {
+      if (typeof MutationObserver !== 'function') return;
+      // Watch the list for pagination / load-more additions, and the whole
+      // document for filter inputs being rendered late (Finsweet or Webflow
+      // Collection List mounting after initial boot).
+      this.listObserver = new MutationObserver(() => this.scheduleUpdate());
+      this.listObserver.observe(this.list, { childList: true, subtree: true });
+
+      this.docObserver = new MutationObserver((mutations) => {
+        // Only re-run if something outside the list added/removed nodes that
+        // could affect filter inputs. Cheap guard — we don't want every
+        // lightbox open to trigger a prune.
+        for (const m of mutations) {
+          if (this.list.contains(m.target)) continue;
+          if (m.addedNodes.length || m.removedNodes.length) {
+            this.scheduleUpdate();
+            return;
+          }
+        }
+      });
+      this.docObserver.observe(document.body, { childList: true, subtree: true });
+    }
+  }
+
   // ─── Namespace + boot ────────────────────────────────────────────────────
 
   const RogueFilms = {
@@ -1195,6 +1388,13 @@
       RogueFilms._controllers.gridHover = controller;
       return controller;
     },
+
+    initFilterPrune(options) {
+      if (RogueFilms._controllers.filterPrune) return RogueFilms._controllers.filterPrune;
+      const controller = new FilterPruneController(options);
+      RogueFilms._controllers.filterPrune = controller;
+      return controller;
+    },
   };
 
   // Auto-init the lightbox if an overlay exists on the page. Safe on pages
@@ -1213,10 +1413,23 @@
     }
   }
 
+  // Auto-init filter prune if a Finsweet list exists AND there's at least
+  // one filter input with fs-list-value on the page. Safe on pages without
+  // either (controller early-returns, observer never starts).
+  function autoInitFilterPrune() {
+    if (
+      document.querySelector('[fs-list-element="list"]') &&
+      document.querySelector('[fs-list-field][fs-list-value]')
+    ) {
+      RogueFilms.initFilterPrune();
+    }
+  }
+
   function boot() {
     injectRuntimeCSS();
     autoInitLightbox();
     autoInitGridHover();
+    autoInitFilterPrune();
   }
 
   if (document.readyState === 'loading') {
