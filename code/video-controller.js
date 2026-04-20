@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.7.1-phase3';
+  const VERSION = '0.7.2-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -93,18 +93,21 @@
       '}',
       'body.rogue-lightbox-open { overflow: hidden; }',
       '',
-      '/* Hide lightbox chrome when not inside a lightbox overlay.',
+      '/* Hide lightbox chrome when the page has no lightbox overlay.',
       '   Chrome lives inside [data-rogue-showreel-content] on the standalone',
-      '   page so it can inherit layout. The standalone page should not show it.',
-      '   When that content is fetched and injected into the lightbox body, the',
-      '   :is() override re-shows it because the chrome then has a',
-      '   [data-rogue-lightbox] ancestor. */',
-      '[data-rogue-lightbox-close],',
-      '[data-rogue-lightbox-prev],',
-      '[data-rogue-lightbox-next] { display: none; }',
-      '[data-rogue-lightbox] [data-rogue-lightbox-close],',
-      '[data-rogue-lightbox] [data-rogue-lightbox-prev],',
-      '[data-rogue-lightbox] [data-rogue-lightbox-next] { display: revert; }',
+      '   /director-showreels/[slug] template so it can inherit layout. When',
+      '   that content is fetched and injected into a page that HAS a',
+      '   lightbox overlay (music-videos, film-tv, etc.), the chrome becomes',
+      '   a descendant of [data-rogue-lightbox] and we want it visible with',
+      '   its authored class styling intact.',
+      '   Using :has() to scope by page context keeps the class-based display',
+      '   (e.g. .showreel_nav-btn\'s display: flex) winning cleanly inside the',
+      '   lightbox — an earlier approach used `display: revert` on the unhide,',
+      '   which resolved past the class to the UA default `block`, breaking',
+      '   the align-items/justify-content centering of the arrow icons. */',
+      'body:not(:has([data-rogue-lightbox])) [data-rogue-lightbox-close],',
+      'body:not(:has([data-rogue-lightbox])) [data-rogue-lightbox-prev],',
+      'body:not(:has([data-rogue-lightbox])) [data-rogue-lightbox-next] { display: none; }',
       '',
       '/* Grid rollover videos (Phase 3) — fade in over the static poster',
       '   while the tile is hovered. The .is-rolling class is applied by',
