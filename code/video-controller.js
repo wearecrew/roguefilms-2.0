@@ -15,7 +15,9 @@
  *                 GridHover (per-tile rollover videos on Music Videos /
  *                 Film & TV / similar grid views),
  *                 FilterPrune (hides Finsweet filter options whose value
- *                 isn't present in the current page's list).
+ *                 isn't present in the current page's list),
+ *                 FilterLabel (mirrors the active Finsweet filter value
+ *                 into a label element — e.g. the dropdown toggle).
  *
  * Per-page usage (Webflow page custom code → Footer):
  *
@@ -31,7 +33,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.7.2-phase3';
+  const VERSION = '0.8.0-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -1386,6 +1388,128 @@
     }
   }
 
+  // ─── Filter label controller (Phase 3) ────────────────────────────────────
+  //
+  // Mirrors the currently-active Finsweet filter value into a designer-
+  // authored label element. Intended use case: the dropdown toggle shows
+  // "All directors" by default, and when the user picks Sam Brown from the
+  // dropdown the toggle text changes to "Sam Brown". Clicking the Finsweet
+  // clear button reverts it to the default text.
+  //
+  // Generic across fields — the same controller handles director filters on
+  // /music-videos, long-form/short-form filters on the upcoming /film-tv, and
+  // any future filter category without code changes.
+  //
+  // DOM contract:
+  //
+  //   <div class="dropdown-toggle">
+  //     <span data-rogue-filter-label="director"
+  //           data-rogue-filter-label-default="All directors">
+  //       All directors
+  //     </span>
+  //   </div>
+  //
+  //   <!-- elsewhere on the page, the Finsweet radio/checkbox inputs -->
+  //   <input fs-list-field="director" fs-list-value="Sam Brown" />
+  //
+  // The default text to show when no filter is active can be given
+  // explicitly via data-rogue-filter-label-default. If that attribute is
+  // absent, the element's initial textContent at init time is used as the
+  // default — so designers can just type "All directors" into the Designer
+  // and it becomes the fallback automatically.
+  //
+  // Multiple selections (Finsweet checkbox filters) are joined with ", " by
+  // default. Override via options.joinMultiple if a page needs different
+  // formatting ("3 selected" etc.).
+  //
+  // The controller watches for:
+  //   - `change` events on filter inputs (covers the normal user pathway)
+  //   - Clicks on [fs-list-element="clear"] buttons (Finsweet's clear UI).
+  //     After Finsweet processes the clear, radios become unchecked but the
+  //     change event isn't always fired on each input — we re-sync shortly
+  //     after the click to catch up.
+
+  class FilterLabelController {
+    constructor(options) {
+      this.opts = Object.assign(
+        {
+          labelSelector: '[data-rogue-filter-label]',
+          defaultAttribute: 'data-rogue-filter-label-default',
+          filterSelector: 'input[fs-list-field][fs-list-value]',
+          clearSelector: '[fs-list-element="clear"]',
+          joinMultiple: ', ',
+        },
+        options || {}
+      );
+
+      this.labels = Array.from(document.querySelectorAll(this.opts.labelSelector));
+      if (this.labels.length === 0) {
+        console.info(
+          '[RogueFilms] filter label: no [data-rogue-filter-label] on page'
+        );
+        return;
+      }
+
+      // Snapshot default text before anything else changes the DOM. Skipped
+      // if the designer set the explicit attribute — that's authoritative.
+      this.labels.forEach((label) => {
+        if (!label.getAttribute(this.opts.defaultAttribute)) {
+          label.setAttribute(
+            this.opts.defaultAttribute,
+            (label.textContent || '').trim()
+          );
+        }
+      });
+
+      this.sync();
+      this.bindEvents();
+
+      console.info(
+        '[RogueFilms] filter label initialised — ' +
+          this.labels.length +
+          ' label(s)'
+      );
+    }
+
+    bindEvents() {
+      // Any filter input change — recompute all labels. Cheap; runs
+      // infrequently (only on user interaction).
+      document.addEventListener('change', (e) => {
+        if (e.target.closest && e.target.closest(this.opts.filterSelector)) {
+          this.sync();
+        }
+      });
+
+      // Finsweet's clear button — schedule a sync after the clear has been
+      // processed. Two staggered syncs give it time to actually uncheck
+      // the radios regardless of Finsweet internal timing.
+      document.addEventListener('click', (e) => {
+        if (e.target.closest && e.target.closest(this.opts.clearSelector)) {
+          setTimeout(() => this.sync(), 0);
+          setTimeout(() => this.sync(), 120);
+        }
+      });
+    }
+
+    sync() {
+      this.labels.forEach((label) => {
+        const field = label.getAttribute('data-rogue-filter-label');
+        if (!field) return;
+        const checkedInputs = document.querySelectorAll(
+          'input[fs-list-field="' + field + '"][fs-list-value]:checked'
+        );
+        if (checkedInputs.length === 0) {
+          label.textContent = label.getAttribute(this.opts.defaultAttribute) || '';
+          return;
+        }
+        const values = Array.from(checkedInputs)
+          .map((i) => i.getAttribute('fs-list-value'))
+          .filter(Boolean);
+        label.textContent = values.join(this.opts.joinMultiple);
+      });
+    }
+  }
+
   // ─── Namespace + boot ────────────────────────────────────────────────────
 
   const RogueFilms = {
@@ -1418,6 +1542,13 @@
       RogueFilms._controllers.filterPrune = controller;
       return controller;
     },
+
+    initFilterLabel(options) {
+      if (RogueFilms._controllers.filterLabel) return RogueFilms._controllers.filterLabel;
+      const controller = new FilterLabelController(options);
+      RogueFilms._controllers.filterLabel = controller;
+      return controller;
+    },
   };
 
   // Auto-init the lightbox if an overlay exists on the page. Safe on pages
@@ -1448,11 +1579,20 @@
     }
   }
 
+  // Auto-init filter label if any [data-rogue-filter-label] exists. Safe
+  // no-op otherwise.
+  function autoInitFilterLabel() {
+    if (document.querySelector('[data-rogue-filter-label]')) {
+      RogueFilms.initFilterLabel();
+    }
+  }
+
   function boot() {
     injectRuntimeCSS();
     autoInitLightbox();
     autoInitGridHover();
     autoInitFilterPrune();
+    autoInitFilterLabel();
   }
 
   if (document.readyState === 'loading') {
