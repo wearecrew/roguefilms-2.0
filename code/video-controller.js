@@ -33,7 +33,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.10.0-phase3';
+  const VERSION = '0.11.0-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -1736,6 +1736,149 @@
     }
   }
 
+  // ─── Hero video controller (Homepage) ──────────────────────────────────
+  //
+  // Single-video hero. Autoplays muted (browser autoplay policy), provides
+  // a mute/unmute toggle that flips audio on user interaction, and lets
+  // the video size to its intrinsic aspect ratio (no cover, no min-height)
+  // so anamorphic sources just work without a separate 16x9 render.
+  //
+  // DOM contract:
+  //
+  //   <section data-rogue-hero>
+  //     <video data-rogue-hero-video
+  //            src="https://.../hero-video.mp4"
+  //            autoplay muted loop playsinline
+  //            poster="..."></video>
+  //     <button data-rogue-hero-mute-toggle type="button" aria-pressed="false">
+  //       <!-- Designer owns the visual — both states are typically combo
+  //            classes on the toggle (.is-audio-on / default) for icon
+  //            swap. Controller sets:
+  //              aria-pressed="false" when muted (default)
+  //              aria-pressed="true"  when unmuted
+  //            and adds .is-audio-on to both the toggle and the hero root
+  //            while audio is playing. -->
+  //     </button>
+  //   </section>
+  //
+  // CSS contract: Designer sets the video's display/width/height in
+  // Webflow — typically `display:block; width:100%; height:auto;` so
+  // the page flows around the video's intrinsic height. Do NOT set
+  // aspect-ratio on the video or force min-height on the hero; let the
+  // file drive.
+  //
+  // Autoplay policy: videos with the `muted` + `playsinline` attributes
+  // are allowed to autoplay on all major browsers (including iOS Safari).
+  // The controller enforces muted on boot as a belt-and-braces in case
+  // the designer forgot one of those attributes. First user interaction
+  // with the toggle then permits audio. If initial play() rejects (rare —
+  // usually missing one of the required attributes) the controller retries
+  // silently on the next canplay.
+
+  class HeroVideoController {
+    constructor(options) {
+      this.opts = Object.assign(
+        {
+          rootSelector: '[data-rogue-hero]',
+          videoSelector: '[data-rogue-hero-video]',
+          toggleSelector: '[data-rogue-hero-mute-toggle]',
+        },
+        options || {}
+      );
+
+      this.root = document.querySelector(this.opts.rootSelector);
+      if (!this.root) {
+        console.info('[RogueFilms] hero root not found; skipping controller');
+        return;
+      }
+
+      this.video = this.root.querySelector(this.opts.videoSelector);
+      if (!this.video) {
+        console.warn('[RogueFilms] hero video element missing');
+        return;
+      }
+
+      this.toggle = this.root.querySelector(this.opts.toggleSelector);
+
+      this.prepareVideo();
+      this.bindEvents();
+      this.syncToggleState();
+
+      console.info('[RogueFilms] hero video initialised');
+    }
+
+    prepareVideo() {
+      // Belt-and-braces — these should already be set via HTML attributes
+      // in Webflow, but enforcing them here avoids a silent autoplay failure
+      // if the designer forgot one.
+      this.video.muted = true;
+      this.video.loop = true;
+      this.video.playsInline = true;
+      this.video.setAttribute('playsinline', '');
+      this.video.setAttribute('webkit-playsinline', '');
+
+      const p = this.video.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          // Rare — usually indicates a missing attribute. Retry once on
+          // canplay, which will succeed if the video has decoded enough
+          // data and the page has met the autoplay policy.
+          this.video.addEventListener(
+            'canplay',
+            () => {
+              const retry = this.video.play();
+              if (retry && typeof retry.catch === 'function') retry.catch(() => {});
+            },
+            { once: true }
+          );
+        });
+      }
+    }
+
+    bindEvents() {
+      if (this.toggle) {
+        this.toggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.toggleAudio();
+        });
+      }
+
+      // Pause when the tab is hidden, resume when visible. Saves battery
+      // and stops the audio continuing while the user is elsewhere.
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          try {
+            this.video.pause();
+          } catch (_) {
+            /* noop */
+          }
+        } else {
+          const p = this.video.play();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        }
+      });
+    }
+
+    toggleAudio() {
+      this.video.muted = !this.video.muted;
+      this.syncToggleState();
+    }
+
+    // Reflect the muted state onto both the hero root and the toggle
+    // button so Webflow can drive the icon/label swap via combo classes
+    // (.is-audio-on) and CSS. Also updates aria-pressed + aria-label for
+    // keyboard / screen reader users.
+    syncToggleState() {
+      const audioOn = !this.video.muted;
+      this.root.classList.toggle('is-audio-on', audioOn);
+      if (this.toggle) {
+        this.toggle.classList.toggle('is-audio-on', audioOn);
+        this.toggle.setAttribute('aria-pressed', String(audioOn));
+        this.toggle.setAttribute('aria-label', audioOn ? 'Mute' : 'Unmute');
+      }
+    }
+  }
+
   // ─── Namespace + boot ────────────────────────────────────────────────────
 
   const RogueFilms = {
@@ -1773,6 +1916,13 @@
       if (RogueFilms._controllers.filterLabel) return RogueFilms._controllers.filterLabel;
       const controller = new FilterLabelController(options);
       RogueFilms._controllers.filterLabel = controller;
+      return controller;
+    },
+
+    initHeroVideo(options) {
+      if (RogueFilms._controllers.heroVideo) return RogueFilms._controllers.heroVideo;
+      const controller = new HeroVideoController(options);
+      RogueFilms._controllers.heroVideo = controller;
       return controller;
     },
   };
@@ -1813,12 +1963,21 @@
     }
   }
 
+  // Auto-init hero video if a hero root is marked. Safe on pages without
+  // one — controller early-returns.
+  function autoInitHeroVideo() {
+    if (document.querySelector('[data-rogue-hero]')) {
+      RogueFilms.initHeroVideo();
+    }
+  }
+
   function boot() {
     injectRuntimeCSS();
     autoInitLightbox();
     autoInitGridHover();
     autoInitFilterPrune();
     autoInitFilterLabel();
+    autoInitHeroVideo();
   }
 
   if (document.readyState === 'loading') {
