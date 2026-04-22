@@ -33,7 +33,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.9.0-phase3';
+  const VERSION = '0.10.0-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -677,6 +677,13 @@
           // a CMS-composed attribute value.
           triggerSelector: '[data-rogue-showreel-url], [data-rogue-showreel-trigger]',
           fetchTimeoutMs: 8000,
+          // Delay before hover-triggered prefetch starts. Short enough to
+          // feel responsive, long enough that a casual mouse flyover past a
+          // tile doesn't kick off a fetch. 100ms is the pattern used by
+          // instant.page and similar libraries — it clears most accidental
+          // flyovers without being perceptible as a "wait" to a deliberate
+          // user.
+          hoverPrefetchDelayMs: 100,
         },
         options || {}
       );
@@ -708,6 +715,7 @@
       };
 
       this.bindEvents();
+      this.bindHoverPrefetch();
       this.setOpen(false, { skipFocus: true });
 
       console.info(
@@ -806,13 +814,20 @@
     async open(url) {
       if (!url) return;
       const triggers = this.getTriggers();
+      const cached = this.cache.has(url);
       this.state.currentUrl = url;
       this.state.currentIndex = triggers.findIndex(
         (t) => this.resolveTriggerUrl(t) === url
       );
 
       this.setOpen(true);
-      this.renderLoading();
+      // Only show the loading state if the content isn't already cached.
+      // Cache hits resolve on the next microtask — skipping renderLoading
+      // avoids the single-frame "empty body → spinner" flash users were
+      // seeing when navigating via prev/next through previously-opened
+      // items, and keeps any inline chrome in the current body visible
+      // until the new body swaps in atomically.
+      if (!cached) this.renderLoading();
       // First pass — updates any overlay-root prev/next chrome before the
       // fetch resolves. A second pass runs after content injection to
       // catch inline chrome that lives inside the fetched HTML.
@@ -834,6 +849,10 @@
           '[data-rogue-lightbox-close], [data-rogue-showreel-back]'
         );
         if (closeBtn && document.activeElement !== closeBtn) closeBtn.focus();
+        // Warm the cache for neighbours so the next prev/next click is
+        // instant. Fire-and-forget: errors land in the catch inside
+        // fetchContent and don't affect the currently open item.
+        this.prefetchAdjacent();
       } catch (err) {
         console.error('[RogueFilms] lightbox fetch failed', err);
         this.body.innerHTML = this.renderErrorHtml(url);
@@ -953,6 +972,87 @@
       );
       prevBtns.forEach((b) => b.classList.toggle('is-disabled', atStart || isolated));
       nextBtns.forEach((b) => b.classList.toggle('is-disabled', atEnd || isolated));
+    }
+
+    // Warm the fetch cache for the items immediately before and after the
+    // currently open one. Called after open() has resolved. Silently does
+    // nothing for out-of-range indices (already at start/end) or cache
+    // entries that already exist. Errors are swallowed — a prefetch that
+    // fails doesn't matter; the real fetch on click will surface it.
+    //
+    // Why two neighbours rather than more: director pages have ~25 items,
+    // music-videos has 75+. Prefetching further than one step in each
+    // direction means downloading content the user is statistically
+    // unlikely to navigate to, and the standalone pages are non-trivial
+    // (typically 50-150kb of HTML + lazy-loaded video manifest). Two
+    // neighbours covers 99% of prev/next navigation without being wasteful.
+    prefetchAdjacent() {
+      const triggers = this.getTriggers();
+      if (triggers.length < 2 || this.state.currentIndex < 0) return;
+      const neighbours = [
+        this.state.currentIndex - 1,
+        this.state.currentIndex + 1,
+      ].filter((i) => i >= 0 && i < triggers.length);
+      for (const i of neighbours) {
+        const url = this.resolveTriggerUrl(triggers[i]);
+        if (url && !this.cache.has(url)) {
+          this.fetchContent(url).catch(() => {});
+        }
+      }
+    }
+
+    // Hover-based prefetch: when a desktop user hovers a trigger tile
+    // for longer than hoverPrefetchDelayMs, kick off a cache-warming
+    // fetch for its URL. By the time the user completes the click, the
+    // content is already loaded and the lightbox opens with no flash.
+    //
+    // Delegation via capture phase: mouseenter doesn't bubble, so we use
+    // the capture phase of mouseover. mouseover fires on every element
+    // the pointer enters (including children), but closest() on the
+    // trigger selector dedupes: we only act when the pointer moves from
+    // "outside trigger" to "inside trigger", tracked via a lastTrigger
+    // reference so repeated mouseover within the same tile is a no-op.
+    //
+    // Touch devices skipped: they fire a synthetic mouseenter just
+    // before the click, giving no meaningful head start — prefetch and
+    // click would race. On touch we rely on prefetchAdjacent() warming
+    // the cache for the items immediately before/after the first open.
+    bindHoverPrefetch() {
+      if (!window.matchMedia || !window.matchMedia('(hover: hover)').matches) {
+        return;
+      }
+      let pending = 0;
+      let lastTrigger = null;
+
+      document.addEventListener('mouseover', (e) => {
+        const t =
+          e.target && e.target.closest
+            ? e.target.closest(this.opts.triggerSelector)
+            : null;
+        if (!t || t === lastTrigger) return;
+        if (this.overlay.contains(t)) return;
+        lastTrigger = t;
+        const url = this.resolveTriggerUrl(t);
+        if (!url || this.cache.has(url)) return;
+        clearTimeout(pending);
+        pending = window.setTimeout(() => {
+          this.fetchContent(url).catch(() => {});
+        }, this.opts.hoverPrefetchDelayMs || 100);
+      });
+
+      document.addEventListener('mouseout', (e) => {
+        // Clear lastTrigger when we leave the current trigger, so a
+        // return visit re-arms the prefetch if the URL still isn't
+        // cached by then.
+        const t =
+          e.target && e.target.closest
+            ? e.target.closest(this.opts.triggerSelector)
+            : null;
+        if (t && t === lastTrigger && !t.contains(e.relatedTarget)) {
+          lastTrigger = null;
+          clearTimeout(pending);
+        }
+      });
     }
 
     // ─── Fetch + inject ────────────────────────────────────────────────────
