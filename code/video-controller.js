@@ -33,7 +33,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.8.0-phase3';
+  const VERSION = '0.9.0-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -124,6 +124,51 @@
       '}',
       '[data-rogue-grid-tile].is-rolling [data-rogue-grid-rollover] {',
       '  opacity: 1;',
+      '}',
+      '',
+      '/* Lightbox loading — designer-controlled element (optional).',
+      '   If the designer adds <div data-rogue-lightbox-loading> inside the',
+      '   overlay (outside [data-rogue-lightbox-body]), the controller toggles',
+      '   .is-visible on it while content is fetching. Default state here is',
+      '   display:none so the element stays hidden until the controller shows',
+      '   it. Both states are overridable in Webflow Designer. */',
+      '[data-rogue-lightbox-loading] { display: none; }',
+      '[data-rogue-lightbox-loading].is-visible {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  justify-content: center;',
+      '}',
+      '',
+      '/* Lightbox loading — fallback spinner (used only when the designer',
+      '   has not added a [data-rogue-lightbox-loading] element). Subtle, ',
+      '   centred over the empty body while fetch is in flight. */',
+      '.rogue-lightbox-loading-fallback {',
+      '  position: absolute;',
+      '  inset: 0;',
+      '  display: flex;',
+      '  align-items: center;',
+      '  justify-content: center;',
+      '  pointer-events: none;',
+      '}',
+      '.rogue-lightbox-spinner {',
+      '  width: 32px; height: 32px;',
+      '  border: 2px solid rgba(255, 255, 255, 0.15);',
+      '  border-top-color: rgba(255, 255, 255, 0.7);',
+      '  border-radius: 50%;',
+      '  animation: rogue-lightbox-spin 0.9s linear infinite;',
+      '}',
+      '@keyframes rogue-lightbox-spin { to { transform: rotate(360deg); } }',
+      '',
+      '/* Lightbox prev/next disabled state — applied by the controller when',
+      '   the current item is at the start or end of the visible list. Uses',
+      '   visibility:hidden rather than display:none so absolute-positioned',
+      '   chrome keeps its slot and inline chrome does not cause layout jump. */',
+      '[data-rogue-lightbox-prev].is-disabled,',
+      '[data-rogue-lightbox-next].is-disabled,',
+      '[data-rogue-showreel-prev].is-disabled,',
+      '[data-rogue-showreel-next].is-disabled {',
+      '  visibility: hidden;',
+      '  pointer-events: none;',
       '}',
     ].join('\n');
     document.head.appendChild(style);
@@ -587,6 +632,13 @@
   //     <button data-rogue-lightbox-close aria-label="Close">…</button>
   //     <button data-rogue-lightbox-prev  aria-label="Previous film">…</button>
   //     <button data-rogue-lightbox-next  aria-label="Next film">…</button>
+  //     <div data-rogue-lightbox-loading>          <!-- optional, designer-owned -->
+  //       <!-- Shown while content is fetching. Controller toggles
+  //            .is-visible on this element. Lives at the overlay root,
+  //            NOT inside [data-rogue-lightbox-body] (the body gets
+  //            wiped on each open). If this element is absent the
+  //            controller injects a subtle centred spinner as fallback. -->
+  //     </div>
   //     <div data-rogue-lightbox-body>
   //       <!-- Placeholder / shell copy of the showreel layout. The controller
   //            replaces innerHTML on open with the fetched standalone page
@@ -604,6 +656,14 @@
   // The href fallback ensures graceful degradation if JS fails.
   // The controller intercepts clicks on elements that match the trigger
   // selector, prevents default, and opens the lightbox.
+  //
+  // Navigation behaviour (v0.9+):
+  //   - prev/next are NON-CIRCULAR. At the start of the (filtered, visible)
+  //     trigger list prev is no-op; at the end next is no-op. Chrome is
+  //     visually hidden via .is-disabled — see updateNavButtons() below.
+  //   - Hidden triggers (e.g. filtered out by Finsweet) are excluded from
+  //     the nav list, so prev/next skips them rather than jumping to
+  //     off-grid items.
 
   class LightboxController {
     constructor(options) {
@@ -753,14 +813,20 @@
 
       this.setOpen(true);
       this.renderLoading();
+      // First pass — updates any overlay-root prev/next chrome before the
+      // fetch resolves. A second pass runs after content injection to
+      // catch inline chrome that lives inside the fetched HTML.
+      this.updateNavButtons();
 
       try {
         const html = await this.fetchContent(url);
         // If the user has navigated to a different URL during fetch, bail.
         if (this.state.currentUrl !== url) return;
         this.body.innerHTML = html;
+        this.hideLoading();
         this.applyVideoAspectRatios(this.body);
         this.autoplayVideoIfPresent(this.body);
+        this.updateNavButtons();
         // Move focus into the freshly-injected chrome for keyboard users.
         // The close button is the natural landing target. If the chrome lives
         // at the overlay root instead, that selector still matches.
@@ -771,6 +837,7 @@
       } catch (err) {
         console.error('[RogueFilms] lightbox fetch failed', err);
         this.body.innerHTML = this.renderErrorHtml(url);
+        this.hideLoading();
       }
     }
 
@@ -815,9 +882,15 @@
 
     getTriggers() {
       // Trigger list excludes the lightbox overlay's own descendants (so
-      // internal links aren't counted), and only matches visible elements.
+      // internal links aren't counted), and only matches visible triggers.
+      // offsetParent === null means the element (or an ancestor) has
+      // display:none — this is how Finsweet filters out non-matching items,
+      // and the only cheap way to detect it without getComputedStyle.
+      // Effect: when a CMS filter is active (e.g. Archive on a director
+      // page), prev/next navigation cycles only through matching items,
+      // and the at-start / at-end check below reflects the filtered set.
       return Array.from(document.querySelectorAll(this.opts.triggerSelector)).filter(
-        (el) => !this.overlay.contains(el)
+        (el) => !this.overlay.contains(el) && el.offsetParent !== null
       );
     }
 
@@ -841,16 +914,45 @@
 
     prev() {
       const triggers = this.getTriggers();
-      if (triggers.length < 2) return;
-      const next = (this.state.currentIndex - 1 + triggers.length) % triggers.length;
-      this.open(this.resolveTriggerUrl(triggers[next]));
+      // Non-circular: no-op at the start of the list. Chrome is also
+      // visually hidden via .is-disabled by updateNavButtons(), so this is
+      // a belt-and-braces guard against keyboard or programmatic clicks.
+      if (this.state.currentIndex <= 0) return;
+      this.open(this.resolveTriggerUrl(triggers[this.state.currentIndex - 1]));
     }
 
     next() {
       const triggers = this.getTriggers();
-      if (triggers.length < 2) return;
-      const next = (this.state.currentIndex + 1) % triggers.length;
-      this.open(this.resolveTriggerUrl(triggers[next]));
+      // Non-circular: no-op at the end of the list. See prev() for rationale.
+      if (this.state.currentIndex >= triggers.length - 1) return;
+      this.open(this.resolveTriggerUrl(triggers[this.state.currentIndex + 1]));
+    }
+
+    // Toggle the .is-disabled class on prev/next chrome when the current
+    // item is at the start or end of the filtered, visible list. Matches
+    // both overlay-root chrome ([data-rogue-lightbox-prev/next]) and the
+    // inline chrome that can live inside the injected body content
+    // ([data-rogue-showreel-prev/next]). Called twice per open(): once
+    // before fetch so overlay-root chrome updates immediately, and once
+    // after injection so any inline chrome inside the fetched HTML gets
+    // the right state too.
+    updateNavButtons() {
+      const triggers = this.getTriggers();
+      const atStart = this.state.currentIndex <= 0;
+      const atEnd = this.state.currentIndex >= triggers.length - 1;
+      // currentIndex < 0 happens when the opened URL isn't in the visible
+      // trigger list — e.g. direct deeplink with a filter active. In that
+      // case hide both rather than pick a random direction.
+      const isolated = this.state.currentIndex < 0;
+
+      const prevBtns = this.overlay.querySelectorAll(
+        '[data-rogue-lightbox-prev], [data-rogue-showreel-prev]'
+      );
+      const nextBtns = this.overlay.querySelectorAll(
+        '[data-rogue-lightbox-next], [data-rogue-showreel-next]'
+      );
+      prevBtns.forEach((b) => b.classList.toggle('is-disabled', atStart || isolated));
+      nextBtns.forEach((b) => b.classList.toggle('is-disabled', atEnd || isolated));
     }
 
     // ─── Fetch + inject ────────────────────────────────────────────────────
@@ -878,9 +980,33 @@
       }
     }
 
+    // Show the loading indicator. If the designer has added a
+    // [data-rogue-lightbox-loading] element inside the overlay (outside
+    // the body container — the body gets wiped on each open), the
+    // controller toggles .is-visible on it. Designer owns the visual.
+    // Otherwise a small centred spinner is injected into the empty body
+    // as a fallback — subtle enough to not distract, subdued colours to
+    // sit well against the dark overlay background.
     renderLoading() {
+      const loader = this.overlay.querySelector('[data-rogue-lightbox-loading]');
+      if (loader) {
+        loader.classList.add('is-visible');
+        // Clear body so previous content doesn't flash while fetching.
+        this.body.innerHTML = '';
+        return;
+      }
       this.body.innerHTML =
-        '<div style="padding: 80px 20px; text-align: center; opacity: 0.6;">Loading…</div>';
+        '<div class="rogue-lightbox-loading-fallback" aria-hidden="true">' +
+        '<div class="rogue-lightbox-spinner"></div>' +
+        '</div>';
+    }
+
+    // Hide the designer-controlled loader. The fallback spinner doesn't
+    // need an explicit hide — body.innerHTML = html on successful fetch
+    // replaces it naturally.
+    hideLoading() {
+      const loader = this.overlay.querySelector('[data-rogue-lightbox-loading]');
+      if (loader) loader.classList.remove('is-visible');
     }
 
     renderErrorHtml(url) {
