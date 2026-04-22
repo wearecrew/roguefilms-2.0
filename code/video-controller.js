@@ -33,7 +33,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.11.0-phase3';
+  const VERSION = '0.12.0-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -1743,6 +1743,15 @@
   // the video size to its intrinsic aspect ratio (no cover, no min-height)
   // so anamorphic sources just work without a separate 16x9 render.
   //
+  // Mouse-follow behaviour (v0.12+): on hover-capable devices the toggle
+  // tracks the cursor whilst inside .hero_media, fading in on enter and
+  // out on leave. A click anywhere in the media toggles audio — the
+  // toggle itself has pointer-events:none so the click lands on the
+  // media container (avoids miss-clicks from sub-frame cursor lag). On
+  // touch devices this is skipped entirely: the toggle stays at whatever
+  // static position the designer set in Webflow, and its own click
+  // handler stays wired.
+  //
   // DOM contract:
   //
   //   <section data-rogue-hero>
@@ -1782,6 +1791,7 @@
           rootSelector: '[data-rogue-hero]',
           videoSelector: '[data-rogue-hero-video]',
           toggleSelector: '[data-rogue-hero-mute-toggle]',
+          mediaSelector: '.hero_media',
         },
         options || {}
       );
@@ -1798,10 +1808,14 @@
         return;
       }
 
+      // Media is the region the cursor-following toggle tracks within.
+      // Falls back to root if there's no dedicated .hero_media wrapper.
+      this.media = this.root.querySelector(this.opts.mediaSelector) || this.root;
       this.toggle = this.root.querySelector(this.opts.toggleSelector);
 
       this.prepareVideo();
       this.bindEvents();
+      this.bindMouseTracking();
       this.syncToggleState();
 
       console.info('[RogueFilms] hero video initialised');
@@ -1836,7 +1850,14 @@
     }
 
     bindEvents() {
-      if (this.toggle) {
+      // Toggle click handler — only active on touch devices. On hover-capable
+      // devices the toggle has pointer-events:none (set by bindMouseTracking)
+      // so clicks pass through to the media element, which gets its own
+      // click handler. Having both wired would fire toggleAudio twice when
+      // tapping the toggle on a hybrid device. The hasHover check below
+      // keeps the behaviour deterministic.
+      const hasHover = !!(window.matchMedia && window.matchMedia('(hover: hover)').matches);
+      if (this.toggle && !hasHover) {
         this.toggle.addEventListener('click', (e) => {
           e.preventDefault();
           this.toggleAudio();
@@ -1857,6 +1878,68 @@
           if (p && typeof p.catch === 'function') p.catch(() => {});
         }
       });
+    }
+
+    // Mouse-following mute toggle on hover-capable devices. The toggle
+    // tracks the cursor while inside the media element, fading in on
+    // enter and out on leave. A single click anywhere inside the media
+    // toggles audio — the toggle itself has pointer-events:none so the
+    // click lands on the media regardless of whether the cursor is
+    // exactly over the icon at the click moment (eliminates miss-clicks
+    // from sub-frame cursor lag).
+    //
+    // Touch devices early-out — the toggle stays at whatever static
+    // position the designer set in Webflow and its own click handler
+    // (bound in bindEvents) stays active. Prevents the tap-highlight
+    // issue where a synthetic mouseenter fires before click.
+    bindMouseTracking() {
+      const hasHover = !!(window.matchMedia && window.matchMedia('(hover: hover)').matches);
+      if (!hasHover) return;
+      if (!this.toggle || !this.media) return;
+
+      // Position the toggle fixed so it works regardless of where it lives
+      // in the DOM tree. pointer-events:none lets clicks fall through to
+      // the media. translate(-50%, -50%) centres the icon on the cursor.
+      this.toggle.style.position = 'fixed';
+      this.toggle.style.pointerEvents = 'none';
+      this.toggle.style.transform = 'translate(-50%, -50%)';
+      this.toggle.style.transition = 'opacity 150ms linear';
+      this.toggle.style.opacity = '0';
+      this.toggle.style.zIndex = '10';
+      // Keep top/left/right/bottom from Designer out of the way — the
+      // controller sets left/top each mousemove. Clearing now avoids the
+      // first frame flashing at the designer's static position.
+      this.toggle.style.top = '0px';
+      this.toggle.style.left = '-9999px';
+
+      // If the toggle lives inside a wrapper like .hero_controls that's
+      // absolutely positioned over the video, ensure the wrapper doesn't
+      // intercept clicks itself — otherwise a wrapper that happens to be
+      // a Link Block would navigate to its href when clicked.
+      const wrapper = this.toggle.parentElement;
+      if (wrapper && wrapper !== this.media) {
+        wrapper.style.pointerEvents = 'none';
+      }
+
+      this.media.addEventListener('mouseenter', () => {
+        this.toggle.style.opacity = '1';
+      });
+      this.media.addEventListener('mouseleave', () => {
+        this.toggle.style.opacity = '0';
+      });
+      this.media.addEventListener('mousemove', (e) => {
+        this.toggle.style.left = e.clientX + 'px';
+        this.toggle.style.top = e.clientY + 'px';
+      });
+
+      // Click anywhere in the media toggles audio.
+      this.media.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.toggleAudio();
+      });
+
+      // Cursor affordance — mouse-over media should clearly signal clickability.
+      this.media.style.cursor = 'pointer';
     }
 
     toggleAudio() {
