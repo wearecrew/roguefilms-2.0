@@ -33,7 +33,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.12.0-phase3';
+  const VERSION = '0.13.0-phase3';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -734,6 +734,22 @@
           if (!trigger) return;
           // Allow middle-click / cmd-click / ctrl-click to open in new tab.
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+          // If the click originated on (or inside) a different anchor that
+          // is a descendant of the trigger, let that anchor navigate —
+          // don't hijack nested links. Common case: a director-name link
+          // rendered inside the tile's meta area where the tile itself is
+          // the lightbox trigger. Without this guard, closest() would find
+          // the outer trigger and open the lightbox instead of navigating
+          // to the nested link's href.
+          const innerAnchor = e.target.closest('a[href]');
+          if (
+            innerAnchor &&
+            innerAnchor !== trigger &&
+            trigger.contains(innerAnchor) &&
+            innerAnchor.getAttribute('href') !== '#'
+          ) {
+            return;
+          }
           const url = this.resolveTriggerUrl(trigger);
           if (!url) return;
           e.preventDefault();
@@ -1932,8 +1948,24 @@
         this.toggle.style.top = e.clientY + 'px';
       });
 
-      // Click anywhere in the media toggles audio.
+      // Click anywhere in the media toggles audio — EXCEPT when the click
+      // target is (or descends from) an interactive element like a link or
+      // button. Without this guard, nested anchors inside the hero item
+      // (e.g. a director name linking to /directors-roster/…) would have
+      // their default navigation swallowed by our preventDefault, and the
+      // user would see audio toggle instead of the link following.
+      //
+      // We specifically keep the behaviour for the mute toggle itself —
+      // the toggle has pointer-events:none, so clicks land on the media,
+      // not on the toggle. The negated selector below is defensive in
+      // case a designer ever removes that rule.
       this.media.addEventListener('click', (e) => {
+        const interactive = e.target.closest(
+          'a[href], button, [role="button"], input, select, textarea, [contenteditable="true"]'
+        );
+        if (interactive && !interactive.hasAttribute('data-rogue-hero-mute-toggle')) {
+          return;
+        }
         e.preventDefault();
         this.toggleAudio();
       });
