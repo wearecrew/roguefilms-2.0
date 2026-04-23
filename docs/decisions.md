@@ -4,6 +4,32 @@ Running record of architectural and project decisions, with rationale. Append ne
 
 ---
 
+## 2026-04-23 · Mobile refinements shipped (v0.14.0), staging to client
+
+**Decision.** Three mobile-only changes, landing as v0.14.0 + page-level CSS:
+
+1. **Homepage work grid collapses to one column at ≤767px.** CSS-only, in Homepage page-level Custom Code. Desktop 1+2 pattern stays; landscape phone (480–767) treated as phone not tablet.
+2. **Talent page becomes a 100svh "app frame" on mobile.** Section is `display:flex; flex-direction:column; height:100svh; overflow:hidden`. `TALENT` title + filter pills pinned at the top (flex: 0 0 auto). `.talent_list-wrap` flexes to fill remaining space with `overflow-y:auto`, so the directors list scrolls internally while the page body stays still. `100svh` not `100vh` to avoid iOS Safari URL-bar clipping. Bottom `mask-image` fade makes the list visually merge into the background video. Footer accessible by scrolling past the 100svh section.
+3. **Hero video on mobile stops autoplaying — poster + tap-to-open-lightbox instead.** `HeroVideoController` early-branches at `matchMedia('(max-width: 767px)')`: sets `preload='none'`, removes `autoplay`, pauses, hides the mute toggle, binds a capture-phase click on `.hero_media` that reads a new hero-scoped `data-rogue-hero-showreel-url` attribute on the `<video>` and opens the lightbox. Desktop path unchanged.
+
+**Why.**
+- Homepage at 393px was a 2-col grid of tiny tiles — hard to see and inconsistent with how Music Videos / Film & TV already collapsed to one column.
+- Talent page on mobile had the video at natural height (short) then the directors list below, then an unwanted navy slab filling the remaining viewport before the footer. The 100svh treatment keeps the video dominant while letting the list scroll inside a bounded area.
+- Hero mute toggle on mobile was the old `hero_controls` link-block with `href="#"` — the v0.12 cursor-follow pattern can't replicate on touch, so the button was effectively dead. Reverting to the same tap-to-lightbox pattern the grid tiles use gave a consistent mobile UX and unlocked audio (lightbox video plays full-length with audio on).
+
+**One trap we walked into and fixed.** First implementation put `data-rogue-showreel-url` on the hero `<video>`. The sitewide lightbox listener picks up anything with that attribute, so desktop clicks double-fired (mute toggle + lightbox open). Renamed to `data-rogue-hero-showreel-url` — hero-scoped, invisible to the sitewide listener, read only by `HeroVideoController.bindMobileLightboxTrigger()`. Lesson: generic trigger attributes are for generic triggers; specialised controllers get specialised attribute names.
+
+**Webflow Designer constraint worth remembering.** The hero section, `.hero_media`, and the Collection List's non-item wrappers all sit OUTSIDE the CMS iteration scope, so none of them can bind CMS fields natively. The only elements inside the loop are the tile content — video + director link. That's why the hero-showreel-url attribute had to live on the `<video>` (inside the Collection Item, inside an HTML Embed with `{{wf}}` token substitution), not on any outer wrapper.
+
+**Separate deliverables alongside the code:**
+- [`docs/qa-pass-2026-04-23.md`](qa-pass-2026-04-23.md) — pre-client-send QA report.
+- [`docs/cms-audit-2026-04-23.md`](cms-audit-2026-04-23.md) — 9-collection field audit with deprecation candidates.
+- [`code/tests/qa-pass.spec.js`](../code/tests/qa-pass.spec.js) — regenerable QA data-gathering spec.
+
+**Staging now on** `https://roguefilms-staging.webflow.io/` (replaced the longer `roguefilms-bef8a340cdee840701aac49d674b.webflow.io` subdomain). Old URL is a 404.
+
+---
+
 ## 2026-04-19 · Phase 3 in flight — lightbox + work-detail architecture
 
 **Decision.** Fetch-and-inject lightbox pattern (not Finsweet Smart Lightbox, not a custom crewjs-modal clone). Standalone `/director-showreels/[slug]` template page is the canonical source. A sitewide `.showreel_lightbox` overlay (with `data-rogue-lightbox*` attributes) sits hidden on every grid page. On tile click, the controller fetches the standalone HTML, extracts `[data-rogue-showreel-content]`, replaces `[data-rogue-lightbox-body]` innerHTML, opens the overlay. In-memory cache per URL.
@@ -30,7 +56,7 @@ Running record of architectural and project decisions, with rationale. Append ne
 
 ## 2026-04-18 · Phase 2 shipped — Talent page live with background-swap controller
 
-**Outcome.** [`/talent`](https://roguefilms-bef8a340cdee840701aac49d674b.webflow.io/talent) is live on the Webflow.io staging subdomain. Controller v0.4.3 served via jsDelivr `@0.4`. 24 directors + 4 rebels detected; filter pills (All / Rogue / Rebel) work; hover swaps to hovered director's video; auto-rotate runs with name highlight; 40% dim overlay; reduced-motion support; canplay-gated fade; poster fallback.
+**Outcome.** [`/talent`](https://roguefilms-staging.webflow.io/talent) is live on the Webflow.io staging subdomain. Controller v0.4.3 served via jsDelivr `@0.4`. 24 directors + 4 rebels detected; filter pills (All / Rogue / Rebel) work; hover swaps to hovered director's video; auto-rotate runs with name highlight; 40% dim overlay; reduced-motion support; canplay-gated fade; poster fallback.
 
 **Iteration history during Phase 2:**
 - v0.1 → v0.2 : shell + basic background-swap

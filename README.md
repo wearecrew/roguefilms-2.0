@@ -118,33 +118,23 @@ Skills under `/skills/` are how we codify repeating patterns for future Claude s
 
 Update this section regularly. It's the first thing anyone reads when picking the project up.
 
-**Current phase:** Phase 3 in flight — standalone page wired, lightbox attributes wired, Music Videos grid rendering, one embed-URL fix away from end-to-end.
+**Current phase:** Phase 3 end-to-end. Homepage / Talent / Music Videos / Film & TV / Director / Showreel detail all live and shipped to client for review (2026-04-23). Controller at v0.14.0 with a full mobile treatment for hero + talent + grids. Awaiting client feedback; CMS field cleanup is queued for while we wait.
+
+**Staging URL:** https://roguefilms-staging.webflow.io/
 
 ## 🔜 Start here next session
 
-**Where we left off:** Music Videos page has 75 tiles rendering in the 2+3 alternating grid. Lightbox overlay is on the page with all `data-rogue-lightbox-*` attributes. 75 tiles are bound as triggers. Sitewide embed is currently loading controller v0.5.1, which can't resolve the tile's trigger URL — v0.5.2 (pushed + tagged) has the href-fallback fix that makes Dan's setup work as wired.
+**Where we left off (2026-04-23):** shipped mobile refinements, QA'd every page at desktop + mobile, delivered written QA report + CMS audit to Dan, sent staging URL to Rogue for review.
 
-**The single unblocker — change one character in the Webflow Site Footer script tag:**
+**Two queued workstreams — pick whichever the client's feedback points at first:**
 
-```html
-<!-- CURRENT (broken: resolves to v0.5.1, no href fallback) -->
-<script src="https://cdn.jsdelivr.net/gh/wearecrew/roguefilms-2.0@v0.5/code/video-controller.js" defer></script>
+1. **Act on client feedback** (whatever comes back — expect small polish items).
+2. **CMS field cleanup** — see [docs/cms-audit-2026-04-23.md](docs/cms-audit-2026-04-23.md). Three Showreel fields (`homepage-hero`, `show-on-homepage`, `homepage-latest-order`) are safe to mark `[DEPRECATED]` now. Six more ("confirm first") need a page-binding check via the Webflow MCP before labelling. Two dormant collections (`Going Rogues`, `Director Stills`) are candidates for a collection-level deprecation note.
 
-<!-- SHOULD BE (no `v` prefix — semver range, picks latest v0.5.x) -->
-<script src="https://cdn.jsdelivr.net/gh/wearecrew/roguefilms-2.0@0.5/code/video-controller.js" defer></script>
-```
-
-Then republish, hard refresh [`/music-videos`](https://roguefilms-bef8a340cdee840701aac49d674b.webflow.io/music-videos), click any tile → lightbox should fetch `/director-showreels/[slug]` content and open.
-
-**If that works, next steps on the Music Videos page:**
-1. Run Playwright lightbox tests (open, prev/next, close, copy-link, esc) against `/music-videos` — write a new suite at `code/tests/music-videos.spec.js`.
-2. Wire conditional visibility on `.showreel_stills` + `.showreel_credits` (show only when CMS field is set) so empty blocks don't render.
-3. Confirm Back pill inside the lightbox closes the overlay (delegates to `data-rogue-showreel-back`).
-4. Check copy-link pill copies the canonical URL and flashes "Copied!".
-5. Check anamorphic videos render with correct aspect ratio via `data-video-width` / `data-video-height` on `.showreel_video-frame`.
-6. Convert the `.showreel_lightbox` element to a Webflow **Symbol / Component** so Homepage, Film & TV, Director pages can drop it in once without duplicating markup.
-
-**After Music Videos is green, Phase 5 Film & TV** is essentially a clone of Music Videos — same grid, same lightbox wiring, different CMS filter (`work-type = Film and TV`). Should take <30min once Music Videos is validated.
+**Also worth a look during the wait:**
+- **Code-quality pass on [`code/video-controller.js`](code/video-controller.js)** — it's now 2200 lines across six controllers. A simplify-pass is queued; see report saved by the code-simplifier agent (pasted into the session history on 2026-04-23 if you need to re-find it, otherwise re-run the agent).
+- **Tile poster hardening check** — QA flagged that grid-tile `<video>` elements on Music Videos / Film & TV / Director pages had `readyState=0` in headless-Safari testing. Likely a Playwright artefact (real users scroll, which triggers IntersectionObserver loads) but Dan wanted belt-and-braces `poster` bindings confirmed across the four grid page templates. Quick MCP check.
+- **Webflow Site Footer embed uses `@v0.14`** (with the `v` prefix). jsDelivr treats that as the exact `v0.14.0` tag, not a semver range. Convention per decisions.md is `@<major>.<minor>` (no `v`) which auto-picks the latest patch. Worth harmonising next time you edit the footer — currently we manually bump to a new `v0.X` tag on each minor release.
 
 **Phase 1 deliverables (2026-04-18):**
 - Design system spec at [docs/design-system.md](docs/design-system.md) — two-tier (primitive + semantic) naming, consistent scale, responsive-patterns section.
@@ -167,32 +157,41 @@ Then republish, hard refresh [`/music-videos`](https://roguefilms-bef8a340cdee84
 **Phase 2 shipped:**
 - [`code/video-controller.js`](code/video-controller.js) — sitewide module served via jsDelivr `@0.4`. Injects motion-easing CSS vars, active-state CSS, exposes `window.RogueFilms.initTalentPage()`.
 - Background-swap controller: crossfade with canplay-gated fade-in, poster layer, auto-rotate, filters, reduced-motion, tab-visibility, race-safe rapid hover.
-- Talent page live on [`/talent`](https://roguefilms-bef8a340cdee840701aac49d674b.webflow.io/talent) with 24 directors, 4 rebels, filter pills, Webflow CMS bindings.
+- Talent page live on [`/talent`](https://roguefilms-staging.webflow.io/talent) with 24 directors, 4 rebels, filter pills, Webflow CMS bindings.
 - Build guide ([`docs/phase-2-talent-build.md`](docs/phase-2-talent-build.md)) + Playwright suite ([`code/tests/talent.spec.js`](code/tests/talent.spec.js)).
 
-**Phase 3 in flight — progress so far:**
+**Phase 3 shipped — everything end-to-end on staging:**
 
 **Architecture decision (decisions.md has the detail)**: **fetch-and-inject** lightbox, not Finsweet Smart Lightbox. Standalone page at `/director-showreels/[slug]` is the canonical source; lightbox overlay is a sitewide shell; controller fetches the standalone HTML, extracts `[data-rogue-showreel-content]`, injects into `[data-rogue-lightbox-body]`.
 
-**Shipped this session:**
-- Controller v0.5.2 with `initLightbox()` — fetch-and-inject, prev/next, copy-link, esc/backdrop close, scroll lock, focus trap, cached fetches, race-safe rapid hover. `href`-fallback for the trigger URL so designers can just bind the Webflow Link Block to the collection page + add a presence-only attribute.
-- CMS `credits` RichText field added to Showreels collection.
-- Static HTML mockup at [`code/mockup/work-detail.html`](code/mockup/work-detail.html) — visually accurate reference.
-- Reference build page "Film detail v2 reference" created via MCP with all classes + data-attributes.
-- [`docs/phase-3-lightbox-build.md`](docs/phase-3-lightbox-build.md) — full attribute contract + step-by-step Designer instructions.
-- Standalone `/director-showreels/[slug]` template rebuilt in v2 styling with CMS bindings. Live on staging (example: [`/director-showreels/welcome-to-my-bank-2`](https://roguefilms-bef8a340cdee840701aac49d674b.webflow.io/director-showreels/welcome-to-my-bank-2)).
-- Sitewide `.showreel_lightbox` overlay wrapper placed on both the reference page and `/music-videos`, with `data-rogue-lightbox*` attributes, close button, inner `.showreel_layout` body.
-- Music Videos page created with Collection List filtered to `work-type = Music Video`. 2+3 alternating grid CSS applied. 75 tiles rendering.
-- Controller auto-inits on any page where a `[data-rogue-lightbox]` is present — no per-page init script needed for the lightbox.
+**What went live across Phases 3 → 4 → 5 → 6:**
+- Lightbox controller — fetch-and-inject, prev/next, copy-link, esc/backdrop close, scroll lock, focus trap, cached fetches, race-safe rapid hover. `href`-fallback for the trigger URL so designers just bind the Webflow Link Block to the collection page and add a presence-only attribute.
+- Standalone `/director-showreels/[slug]` template rebuilt in v2 styling with CMS bindings (example: [`/director-showreels/welcome-to-my-bank-2`](https://roguefilms-staging.webflow.io/director-showreels/welcome-to-my-bank-2)).
+- Homepage — ROGUE wordmark hero over anamorphic featured reel, 1+2 CSS-Grid pattern for the latest-work section, Finsweet CMS Slider for News, pink tagline band.
+- Music Videos ([`/music-videos`](https://roguefilms-staging.webflow.io/music-videos)) + Film & TV ([`/film-tv`](https://roguefilms-staging.webflow.io/film-tv)) — 2+3 alternating grid, director-filter dropdown, Finsweet list-filter search, lightbox triggers on every tile.
+- Director detail page — Current/Archive toggle, 3-up work grid.
+- Grid-hover controller — tiles swap to their rollover loop on hover (desktop only — no-op on touch + reduced-motion).
+- Hero video controller — desktop cursor-tracking mute toggle + v0.14 mobile branch (poster + tap-to-lightbox, no autoplay).
+- Homepage featured CMS collection added as the non-destructive replacement for `homepage-hero` / `show-on-homepage` / `homepage-latest-order` Switch fields on Showreels.
+- CMS `credits` RichText field + `work-status` Option field on Showreels.
+- Full Playwright suite at [`code/tests/`](code/tests/) — talent, QA-pass, etc.
 
-**Tagged releases**: v0.5.0, v0.5.1, v0.5.2. jsDelivr `@0.5` semver range points to latest v0.5.x.
+**Mobile refinements shipped 2026-04-23 (v0.14.0):**
+- **Talent page** — section becomes `100svh` on mobile; TALENT title + filter pills pinned at the top; directors list scrolls internally via `overflow-y: auto` on `.talent_list-wrap`; list uses `column-count: 1` on ≤767px; bottom `mask-image` fade so the list merges into the video. CSS in Talent page-level custom code.
+- **Homepage grid** — `grid-template-columns: 1fr !important` at ≤767px, kills the 1+2 alternating pattern on phones. CSS in Homepage page-level custom code.
+- **Hero video on mobile** — `HeroVideoController` branches on `matchMedia('(max-width: 767px)')`. Mobile path: `preload='none'`, no `play()`, hide the mute toggle, capture-phase click on `.hero_media` → open the full-length reel in the lightbox via a new hero-scoped `data-rogue-hero-showreel-url` attribute on the `<video>`. Desktop path unchanged. The hero-scoped attribute name (not `data-rogue-showreel-url`) stops the sitewide lightbox delegation from double-firing alongside the desktop mute toggle.
+- **QA pass spec** at [`code/tests/qa-pass.spec.js`](code/tests/qa-pass.spec.js) — walks every page at desktop + mobile, saves console/network/DOM findings + screenshots to `test-results/qa-pass/`.
+- **QA report** at [`docs/qa-pass-2026-04-23.md`](docs/qa-pass-2026-04-23.md) — summary of pre-client-send findings.
+- **CMS audit** at [`docs/cms-audit-2026-04-23.md`](docs/cms-audit-2026-04-23.md) — field-by-field deprecation candidates across all 9 collections.
 
-**Remaining loose ends:**
-- Site Footer embed uses `@v0.5` — should be `@0.5` (see "Start here next session" above).
-- Lightbox overlay is not yet a Webflow Symbol / Component — currently duplicated on each page where it's needed.
-- Prev/next on the STANDALONE page are inert (deferred to Phase 6 for director-archive navigation).
-- No Playwright tests for Music Videos / lightbox yet.
-- Filter dropdown (director) + search input on Music Videos not yet built (Finsweet list-filter — optional polish).
+**Tagged releases** (latest): v0.5.x → v0.11 → v0.12 → v0.13 → **v0.14.0** (mobile hero). jsDelivr embed currently uses `@v0.14` (exact-tag match).
+
+**Known loose ends (non-blocking):**
+- Lightbox overlay is not a Webflow Symbol / Component yet — currently duplicated on each page where it's needed. Consolidate during Phase 7 cleanup.
+- Prev/next on the STANDALONE page are inert (director-archive navigation deferred).
+- jsDelivr embed convention drift — we've been using `@v0.X` (exact) instead of `@0.X` (semver range). Works but means each minor release needs a Webflow edit. Harmonise next time the embed is touched.
+- CMS field deprecation labels not yet applied (queued work — see audit doc).
+- Unused collections (`Going Rogues`, `Director Stills`) not yet marked dormant.
 
 **Resolved (Phase 0 walkthrough):**
 - Vimeo plan: Pro. HLS streams are available on Pro accounts via the Player API. We can use HLS for the talent page background video and grid hover loops. Direct progressive MP4 also available as fallback.

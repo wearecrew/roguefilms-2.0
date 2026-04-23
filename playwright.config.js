@@ -10,7 +10,7 @@ const { defineConfig, devices } = require('@playwright/test');
  * Default points at the Webflow.io subdomain (reads from `WF_SHORT_NAME` if set).
  */
 
-const DEFAULT_SHORT_NAME = 'roguefilms-bef8a340cdee840701aac49d674b';
+const DEFAULT_SHORT_NAME = 'roguefilms-staging';
 const SHORT_NAME = process.env.WF_SHORT_NAME || DEFAULT_SHORT_NAME;
 const BASE_URL = process.env.BASE_URL || `https://${SHORT_NAME}.webflow.io`;
 
