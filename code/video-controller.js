@@ -33,7 +33,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.13.0-phase3';
+  const VERSION = '0.14.0-hero-mobile';
 
   // ─── Design-system runtime CSS ───────────────────────────────────────────
   //
@@ -1768,13 +1768,27 @@
   // static position the designer set in Webflow, and its own click
   // handler stays wired.
   //
+  // Mobile behaviour (v0.14+): at ≤767px viewport, the controller takes
+  // a completely different path — no autoplay, no mute toggle, no mouse
+  // tracking. The <video>'s `poster` attribute paints a still frame and
+  // tapping the hero opens the full-length reel in the sitewide lightbox.
+  // Matches the way grid tiles behave on mobile and avoids the broken
+  // "tap to unmute" UX that cursor-tracking can't replicate on touch.
+  // Requires a `data-rogue-hero-showreel-url` attribute on the <video>
+  // pointing at `/director-showreels/<slug>` — the controller reads that
+  // URL and passes it to the lightbox on tap. The attribute name is
+  // hero-scoped (not `data-rogue-showreel-url`) so the sitewide lightbox
+  // trigger-delegation doesn't also fire on desktop video clicks, which
+  // would otherwise double-fire alongside the mute toggle.
+  //
   // DOM contract:
   //
   //   <section data-rogue-hero>
   //     <video data-rogue-hero-video
   //            src="https://.../hero-video.mp4"
-  //            autoplay muted loop playsinline
-  //            poster="..."></video>
+  //            autoplay muted loop playsinline preload="none"
+  //            poster="..."
+  //            data-rogue-hero-showreel-url="/director-showreels/the-slug"></video>
   //     <button data-rogue-hero-mute-toggle type="button" aria-pressed="false">
   //       <!-- Designer owns the visual — both states are typically combo
   //            classes on the toggle (.is-audio-on / default) for icon
@@ -1782,7 +1796,8 @@
   //              aria-pressed="false" when muted (default)
   //              aria-pressed="true"  when unmuted
   //            and adds .is-audio-on to both the toggle and the hero root
-  //            while audio is playing. -->
+  //            while audio is playing.
+  //            The toggle is hidden entirely at ≤767px. -->
   //     </button>
   //   </section>
   //
@@ -1799,6 +1814,13 @@
   // with the toggle then permits audio. If initial play() rejects (rare —
   // usually missing one of the required attributes) the controller retries
   // silently on the next canplay.
+  //
+  // Preload hint: use `preload="none"` on the <video> in Webflow. Desktop
+  // still autoplays because the controller calls play() which forces a
+  // load regardless of the hint; mobile never starts a download because
+  // the mobile branch skips play() entirely. If you leave `preload="auto"`
+  // the mobile browser will fetch a chunk of video before the controller
+  // has a chance to cancel — wastes cellular data for no benefit.
 
   class HeroVideoController {
     constructor(options) {
@@ -1829,12 +1851,93 @@
       this.media = this.root.querySelector(this.opts.mediaSelector) || this.root;
       this.toggle = this.root.querySelector(this.opts.toggleSelector);
 
+      // Mobile takes a completely different path — no autoplay, no toggle,
+      // tap-to-open-lightbox. See the comment block above for why.
+      this.isMobile = !!(
+        window.matchMedia && window.matchMedia('(max-width: 767px)').matches
+      );
+
+      if (this.isMobile) {
+        this.prepareMobileHero();
+        console.info('[RogueFilms] hero initialised (mobile: poster + lightbox trigger)');
+        return;
+      }
+
       this.prepareVideo();
       this.bindEvents();
       this.bindMouseTracking();
       this.syncToggleState();
 
       console.info('[RogueFilms] hero video initialised');
+    }
+
+    // ─── Mobile path ───────────────────────────────────────────────────────
+    //
+    // At ≤767px we don't play the video. The <video>'s poster attribute
+    // paints a still; tapping the hero opens the full-length reel in the
+    // sitewide lightbox. The mute toggle is hidden — there's no audio
+    // playing inline to toggle.
+
+    prepareMobileHero() {
+      // Cancel any pending autoplay. removing the `autoplay` attribute
+      // stops the browser's "fetch + play when ready" path. Setting
+      // preload to 'none' tells the browser not to start fetching data
+      // on its own. A defensive pause() covers the edge case where the
+      // browser has already started preloading (e.g. preload="auto" was
+      // still in the HTML) and paused the first frame.
+      this.video.preload = 'none';
+      this.video.removeAttribute('autoplay');
+      try { this.video.pause(); } catch (_) { /* noop */ }
+
+      // The mute toggle is meaningless on mobile — the video never plays.
+      // Hiding via inline style rather than a class so the Designer's
+      // base styles stay untouched and predictable.
+      if (this.toggle) this.toggle.style.display = 'none';
+
+      this.bindMobileLightboxTrigger();
+    }
+
+    bindMobileLightboxTrigger() {
+      const url = this.video.getAttribute('data-rogue-hero-showreel-url');
+      if (!url) {
+        console.warn(
+          '[RogueFilms] hero mobile: no data-rogue-hero-showreel-url on <video>; tap will be inert'
+        );
+        return;
+      }
+
+      // Capture-phase click handler on .hero_media. Captures the event
+      // before it reaches any nested anchor (e.g. a director-page link
+      // wrapping the video) and before the sitewide lightbox-trigger
+      // delegation listener on document. preventDefault blocks the
+      // default anchor navigation; stopPropagation keeps the event from
+      // bubbling up to either the .hero_media bubble-phase toggleAudio
+      // handler (which bindMouseTracking would have added on desktop —
+      // not added on mobile, but defensive) or the document-level
+      // lightbox listener.
+      this.media.addEventListener(
+        'click',
+        (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const lb =
+            (window.RogueFilms &&
+              window.RogueFilms._controllers &&
+              window.RogueFilms._controllers.lightbox) ||
+            (window.RogueFilms &&
+              typeof window.RogueFilms.initLightbox === 'function' &&
+              window.RogueFilms.initLightbox());
+          if (lb && typeof lb.open === 'function') {
+            lb.open(url);
+          } else {
+            console.warn('[RogueFilms] hero mobile: lightbox not available');
+          }
+        },
+        true
+      );
+
+      // Affordance — tapping anywhere in the media opens the lightbox.
+      this.media.style.cursor = 'pointer';
     }
 
     prepareVideo() {
